@@ -1,0 +1,2 @@
+import{j as e,Q as l}from"./index-CpwL8YM7.js";function t({members:r,value:o,onChange:n}){return e.jsx("div",{className:"flex flex-wrap gap-3",role:"radiogroup","aria-label":"Seleziona persona",children:r.map(a=>{const i=a.id===o;return e.jsx("button",{type:"button",role:"radio","aria-checked":i,"aria-label":a.name,onClick:()=>n(a.id),className:`rounded-2xl p-2 transition-all
+              ${i?"bg-violet-50 ring-2 ring-violet-500":"hover:bg-gray-50"}`,children:e.jsx(l,{member:a,size:"md"})},a.id)})})}export{t as P};

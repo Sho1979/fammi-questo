@@ -1,0 +1,37 @@
+﻿---
+description: Tailwind CSS styling conventions
+globs: "**/*.{tsx,jsx,html}"
+alwaysApply: false
+---
+
+# Tailwind CSS Conventions
+
+## General
+- Use Tailwind utility classes exclusively — no CSS modules, no styled-components
+- Mobile-first responsive design: default = mobile, `sm:` `md:` `lg:` for larger
+- Use `className` template literals for conditional classes
+- Prefer `clsx` or `cn` utility for conditional class merging
+
+## Color Palette (Family Manager)
+- Primary: blue-600 / blue-700
+- Success: green-500 / green-600
+- Warning: amber-500 / amber-600
+- Danger: red-500 / red-600
+- Background: gray-50 (light) / gray-900 (dark)
+- Card: white / gray-800 (dark)
+
+## Spacing & Layout
+- Use consistent spacing: `p-4`, `gap-4`, `space-y-4`
+- Cards: `rounded-xl shadow-sm border border-gray-200 p-4`
+- Max content width: `max-w-md mx-auto` (mobile-optimized PWA)
+- Use Flexbox (`flex`) for 1D layouts, Grid (`grid`) for 2D
+
+## Dark Mode
+- Prepare classes with `dark:` prefix from R1
+- Store preference in Dexie settings table
+- Apply via `class="dark"` on `<html>` element
+
+## Accessibility
+- Minimum touch target: `min-h-[44px] min-w-[44px]`
+- Focus states: `focus:ring-2 focus:ring-blue-500 focus:outline-none`
+- Color contrast: ensure WCAG AA minimum

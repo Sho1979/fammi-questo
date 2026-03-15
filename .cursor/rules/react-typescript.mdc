@@ -1,0 +1,46 @@
+﻿---
+description: React and TypeScript coding conventions
+globs: "**/*.{tsx,ts,jsx,js}"
+alwaysApply: false
+---
+
+# React + TypeScript Conventions
+
+## Component Structure
+- Use functional components with TypeScript interfaces for props
+- Export components as default exports
+- Max 150 lines per component — split if larger
+- One component per file, named same as file (PascalCase)
+
+## TypeScript
+- Enable strict mode: `"strict": true` in tsconfig.json
+- Always type function parameters and return values
+- Use interfaces over types for object shapes (extensibility)
+- Use `unknown` over `any` — never use `any`
+- Prefer `const` assertions and discriminated unions
+
+## Naming
+- Components: PascalCase (`ExpenseForm.tsx`)
+- Hooks: camelCase with `use` prefix (`useExpenses.ts`)
+- Utils: camelCase (`formatCurrency.ts`)
+- Types/Interfaces: PascalCase with `I` prefix only if needed
+- Boolean vars: `is/has/should` prefix (`isLoading`, `hasError`)
+- Event handlers: `handle` prefix (`handleSubmit`, `handleClick`)
+
+## State Management
+- Dexie.js + dexie-react-hooks for persistent data (useLiveQuery)
+- Zustand for UI-only ephemeral state
+- Never mix: persistent data in Dexie, UI state in Zustand
+- Avoid prop drilling > 2 levels — use Zustand or context
+
+## Performance
+- Memoize expensive computations with `useMemo`
+- Memoize callbacks with `useCallback` when passed as props
+- Use `React.lazy()` for route-level code splitting
+- Avoid inline object/array creation in JSX props
+
+## Error Handling
+- Wrap async operations in try/catch
+- Show user-friendly error messages in Italian
+- Log technical errors to console in English
+- Use Error Boundaries for component-level error catching

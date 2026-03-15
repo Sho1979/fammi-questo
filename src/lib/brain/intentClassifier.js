@@ -1,0 +1,1029 @@
+/**
+ * intentClassifier.js — Parser locale a 3 livelli (L0 pattern + L1 NLP.js + L2 Sinapsi).
+ *
+ * Questo è il cuore del Cervellone: per ogni frase determina l'intent,
+ * estrae entità e costruisce le azioni risultanti.
+ *
+ * Se viene passato un debugTrace, raccoglie dati dettagliati per ogni frase.
+ *
+ * ─── POLICY L0 PATTERNS ────────────────────────────────────────────
+ * L0 cattura SOLO pattern strutturalmente inequivocabili:
+ *   - STRONG (conf ≥ 0.90): importi €, assenze scuola, logistica portare/prendere
+ *   - MEDIUM (conf 0.80-0.85): reminder, task espliciti, visitor calendar
+ *   - Se un pattern L0 non è ≥ 0.80, NON aggiungerlo a L0 → delegare a L1+L2
+ *
+ * REGOLA: nuovi intent vanno SEMPRE in L1 training + L2 bootstrap, MAI in L0,
+ * a meno che non abbiano un marker strutturale chiaro (es. € per expense).
+ * L0 deve restare piccolo per evitare esplosione dei pattern.
+ * ────────────────────────────────────────────────────────────────────
+ */
+
+import { db } from '../localDb.js'
+import { classify, isNlpReady } from '../brainNlp.js'
+import { NLP_CONFIDENCE_HIGH, NLP_CONFIDENCE_LOW, SYNAPSE_CONFIDENCE_THRESHOLD, SHADOW_CONFIRM_THRESHOLD } from './config.js'
+import { stemIT, tokenizeForMatching, splitSentences } from './textUtils.js'
+import {
+  parseLocalDate, parseLocalTime, parseTimeRange,
+  parseAmount, extractPersons, extractLogistics,
+  extractLocation, extractActivity,
+} from './entityExtractor.js'
+import { BOOTSTRAP_SYNAPSES } from './patterns.js'
+import { getTimeContext, computeSynapseActivations } from './synapseEngine.js'
+import { buildAction, guessCategoryFromSynapses } from './actionBuilder.js'
+import { addSentenceTrace, isDebugEnabled } from './debugLogger.js'
+import { normalizeAndValidateActions } from './actionNormalizer.js'
+
+// ---------------------------------------------------------------
+// KEYWORD CATEGORY RESOLVER � override categoria per keyword forti
+// ---------------------------------------------------------------
+/**
+ * Se la frase contiene keyword con una categoria di default forte,
+ * e il contesto non specifica un override esplicito, forza la categoria.
+ * Es: "riunione" ? "lavoro" (default), "riunione a scuola" ? "scuola" (override)
+ */
+const KEYWORD_CATEGORY_MAP = [
+  { keywords: ['riunione', 'meeting', 'call', 'webinar', 'conferenza'], defaultCat: 'lavoro',
+    overrides: { scuola: /\b(?:scuola|scolastica|genitori|professori|insegnanti)\b/i,
+                 condominio: /\b(?:condominio|condominiale|condomini|amministratore)\b/i } },
+  { keywords: ['massaggio', 'fisioterapia', 'fisio'], defaultCat: 'medico',
+    overrides: {} },
+  { keywords: ['compleanno', 'festa', 'battesimo', 'comunione', 'matrimonio', 'anniversario'], defaultCat: 'famiglia',
+    overrides: {} },
+]
+
+function resolveKeywordCategory(sentence, currentCategory) {
+  const lower = sentence.toLowerCase()
+  for (const entry of KEYWORD_CATEGORY_MAP) {
+    const hasKeyword = entry.keywords.some(kw => lower.includes(kw))
+    if (!hasKeyword) continue
+
+    // Controlla override espliciti (contesto specifico nella frase)
+    for (const [cat, re] of Object.entries(entry.overrides)) {
+      if (re.test(lower)) return cat
+    }
+
+    // Se la categoria corrente non � quella di default e non c'� un override esplicito,
+    // forza la categoria di default della keyword
+    return entry.defaultCat
+  }
+  return currentCategory
+}
+
+/**
+ * Per ogni frase:
+ *   L0: Se c'è un importo chiaro → expense (pattern diretto)
+ *   L1: NLP.js classifica l'intent con una rete neurale
+ *   L2: Le sinapsi pesate forniscono un secondo parere
+ *   Combina L1+L2 per determinare tipo e confidenza
+ *
+ * @param {string} text - Testo originale
+ * @param {Array} members - Membri famiglia
+ * @param {string} familyId
+ * @param {object} currentMember
+ * @param {object} [debugTrace] - Se fornito, raccoglie dati debug per ogni frase
+ */
+export async function parseLocally(text, members = [], familyId = null, currentMember = null, debugTrace = null) {
+  const sentences = splitSentences(text)
+  const actions = []
+  let totalConfidence = 0
+  const timeCtx = getTimeContext()
+  const debug = debugTrace && isDebugEnabled()
+
+  // Salva le frasi splittate nel trace
+  if (debug) {
+    debugTrace.sentences = [...sentences]
+  }
+
+  // Carica sinapsi apprese dal DB
+  // SHADOW LEARNING: sinapsi con confirmCount < SHADOW_CONFIRM_THRESHOLD sono shadow
+  // e non vengono incluse nel parsing. Sinapsi bootstrap (senza confirmCount) sono sempre attive.
+  const learnedSynapses = new Map()
+  if (familyId) {
+    try {
+      const patterns = await db.patterns
+        .where('family_id').equals(familyId)
+        .and(p => !p._deleted)
+        .toArray()
+
+      for (const p of patterns) {
+        if (!p.keyword) continue
+        // Shadow filter: sinapsi utente con confirmCount < threshold vengono ignorate
+        if (p.source === 'user' && (p.confirmCount || 0) < SHADOW_CONFIRM_THRESHOLD) continue
+
+        const stem = stemIT(p.keyword)
+        const weight = 0.2 + 0.7 * (1 - 1 / (1 + (p.score || 0) * 0.15))
+        const synapse = { actionType: p.actionType, category: p.category, weight, source: 'learned' }
+        if (!learnedSynapses.has(stem)) learnedSynapses.set(stem, [])
+        learnedSynapses.get(stem).push(synapse)
+        if (!learnedSynapses.has(p.keyword)) learnedSynapses.set(p.keyword, [])
+        learnedSynapses.get(p.keyword).push(synapse)
+      }
+    } catch (err) {
+      console.warn('[Brain] Errore caricamento sinapsi:', err)
+    }
+  }
+
+  // Merge bootstrap + learned
+  const allSynapses = new Map(BOOTSTRAP_SYNAPSES)
+  for (const [key, syns] of learnedSynapses) {
+    if (allSynapses.has(key)) {
+      allSynapses.set(key, [...allSynapses.get(key), ...syns])
+    } else {
+      allSynapses.set(key, syns)
+    }
+  }
+
+  // Contesto condiviso tra frasi (coreference + spese)
+  let lastContext = { location: null, subject: null, activity: null, driver: null, persons: [] }
+
+  for (const sentence of sentences) {
+    const lower = sentence.toLowerCase()
+    const tokens = tokenizeForMatching(sentence)
+    const stems = tokens.map(stemIT)
+    let persons = extractPersons(sentence, members)
+    const date = parseLocalDate(sentence)
+    const time = parseLocalTime(sentence)
+    const amount = parseAmount(sentence)
+    const logistics = extractLogistics(sentence, members)
+    console.log('[Brain] extractLogistics RESULT:', JSON.stringify({ driver: logistics?.driver?.name, subject: logistics?.subject?.name, actionVerb: logistics?.actionVerb, accompaniedBy: logistics?.accompaniedBy?.name, pickupBy: logistics?.pickupBy?.name }))
+
+    // ─── COREFERENCE: risolvi pronomi con contesto frase precedente ───
+    // Pronomi italiani cliticizzati: "prendila", "portalo", "accompagnale"
+    // e forme libere: "poi prendi lei", "e porta lui"
+    if (persons.length === 0 && lastContext.persons.length > 0) {
+      const pronounF = /\b(?:prendil[ae]|portal[ae]|accompagnal[ae]|ritiral[ae]|lei)\b/i
+      const pronounM = /\b(?:prendil[oi]|portal[oi]|accompagnal[oi]|ritiral[oi]|lui)\b/i
+      const pronounPl = /\b(?:prendil[ie]|portal[ie]|accompagnal[ie]|ritiral[ie]|loro)\b/i
+
+      if (pronounF.test(lower)) {
+        // Cerca femmina nel contesto precedente
+        const femRef = lastContext.persons.find(p =>
+          p.gender === 'F' || p.role === 'child' || p.role === 'figlio'
+        ) || lastContext.persons[0]
+        if (femRef) persons = [femRef]
+      } else if (pronounM.test(lower)) {
+        const mascRef = lastContext.persons.find(p =>
+          p.gender === 'M'
+        ) || lastContext.persons[0]
+        if (mascRef) persons = [mascRef]
+      } else if (pronounPl.test(lower)) {
+        persons = [...lastContext.persons]
+      }
+    }
+
+    // Aggiorna contesto tra frasi
+    const sentLocation = extractLocation(sentence, members)
+    const sentActivity = extractActivity(sentence)
+    if (sentLocation) lastContext.location = sentLocation
+    if (sentActivity) lastContext.activity = sentActivity
+    if (logistics?.subject) lastContext.subject = logistics.subject
+    if (logistics?.driver) lastContext.driver = logistics.driver
+    if (persons.length > 0) lastContext.persons = persons
+
+    // Oggetto per raccolta dati debug di questa frase
+    const sentenceWarnings = []
+
+    // ─── L0: Pattern strutturali diretti ───
+
+    // Se c'è un importo chiaro → expense (90%)
+    if (amount !== null && amount > 0) {
+      console.log('[Brain] Expense detected:', amount, '€ — lastContext:', JSON.stringify(lastContext))
+      const action = buildAction('expense', sentence, {
+        amount, date, time, persons, members, logistics, timeCtx,
+        category: guessCategoryFromSynapses('expense', tokens, stems, allSynapses),
+      })
+      if (lastContext.location || lastContext.activity) {
+        const parts = []
+        if (lastContext.activity) parts.push(lastContext.activity)
+        if (lastContext.location) parts.push(lastContext.location)
+        if (lastContext.subject) parts.push(lastContext.subject.name)
+        action.note = parts.join(' - ')
+      }
+      if (!action.person && lastContext.driver) {
+        action.person = lastContext.driver.name
+      }
+      actions.push(action)
+      totalConfidence += 0.90
+
+      // Debug trace per L0 expense
+      if (debug) {
+        addSentenceTrace(debugTrace, {
+          sentence,
+          intent: 'expense',
+          confidence: 0.90,
+          source: 'l0_pattern',
+          people: persons.map(p => p.name),
+          date, time, amount,
+          location: sentLocation,
+          activity: sentActivity,
+          logistics: logistics ? { driver: logistics.driver?.name, subject: logistics.subject?.name, verb: logistics.actionVerb } : null,
+          actionsGenerated: [action],
+          warnings: sentenceWarnings,
+          hasAmount: true,
+        })
+      }
+      continue
+    }
+
+    // ─── L0b: Pattern assenza → evento assenza ───
+    const absencePatterns = [
+      /(?:non\s+(?:ci\s+)?sono|non\s+(?:sono\s+|è\s+)?disponibile|sono\s+(?:fuori|assente|via|impegnat[oa]))/i,
+      /(?:non\s+(?:ci\s+)?sar[oò]|non\s+potr[oò]\s+(?:esserci|venire)|sar[oò]\s+(?:fuori|via|assente|impegnat[oa]))/i,
+      /(?:ho\s+un\s+impegno|sono\s+occupat[oa]|non\s+(?:posso|riesco)|(?:è|e')\s+(?:fuori|assent[ea]|via|impegnat[oa]|occupat[oa]))/i,
+      // Assenze da scuola/attività
+      /(?:non\s+va\s+a\s+scuola|non\s+va\s+all[ae'']\s*\w+|niente\s+scuola|niente\s+lezione)/i,
+      /(?:niente\s+(?:pallavolo|allenamento|danza|nuoto|calcio|basket|tennis|karate|ginnastica|catechismo|scout|palestra|corso|partita|gara))/i,
+      /(?:non\s+va\s+a\s+(?:danza|nuoto|calcio|basket|palestra|allenamento|lezione|catechismo|scout|tennis|karate|ginnastica|pallavolo))/i,
+      /(?:non\s+ha\s+(?:allenamento|lezione|partita|gara|corso|danza|nuoto|palestra|calcio|basket|tennis|karate|ginnastica|catechismo|scout|pallavolo))/i,
+      /(?:resta|rimane)\s+a\s+casa/i,
+      /(?:ha\s+la\s+febbre|sta\s+male|si\s+sente\s+male|è\s+malat[oa]|sta\s+poco\s+bene|non\s+si\s+sente\s+bene)/i,
+      /\bfebbre\s+\w+\b/i,
+      /\b(?:è\s+malat[oa]|malat[oa])\b/i,
+    ]
+    const isAbsence = absencePatterns.some(re => re.test(lower))
+    if (isAbsence) {
+      const absentPerson = persons?.[0] || null
+      const timeRange = parseTimeRange(sentence)
+      const absentName = absentPerson?.name || currentMember?.name || null
+
+      const title = absentName
+        ? `${absentName} non disponibile`
+        : 'Non disponibile'
+
+      const calAction = {
+        type: 'calendar',
+        date,
+        title,
+        assignedTo: absentName,
+        time: timeRange?.start || time || null,
+        timeEnd: timeRange?.end || null,
+        category: 'assenza',
+        isAbsence: true,
+      }
+      actions.push(calAction)
+      const absenceActions = [calAction]
+
+      // ─── Rilevamento "vi ricordate" / "ricordatevi" → promemoria per gli altri ───
+      const reminderPatterns = [
+        /(?:vi\s+)?ricordat(?:e|evi)\s+che/i,
+        /(?:vi\s+)?ricord[oi]\s+che/i,
+        /non\s+dimenticat(?:e|evi)\s+che/i,
+        /tenete\s+(?:a\s+)?mente\s+che/i,
+        /(?:vi\s+)?avvis[oi]\s+che/i,
+        /sappiate\s+che/i,
+      ]
+      const wantsReminder = reminderPatterns.some(re => re.test(lower))
+
+      if (wantsReminder && members.length > 0) {
+        const absentId = absentPerson?.id || currentMember?.id || null
+        const otherMembers = members.filter(m =>
+          m.id !== absentId &&
+          (m.role === 'parent' || m.role === 'genitore' || m.role === 'child')
+        )
+
+        const timeLabel = timeRange
+          ? ` (${timeRange.start}–${timeRange.end})`
+          : ''
+
+        for (const member of otherMembers) {
+          const reminderAction = {
+            type: 'reminder',
+            title: `${absentName}${timeLabel} non disponibile`,
+            text: `${absentName} ha ricordato: ${date || 'prossimamente'} non sarà disponibile${timeLabel}. Conferma di aver letto.`,
+            assignedTo: member.name,
+            assignedToId: member.id,
+            date,
+            needsConfirm: true,
+            fromPerson: absentName,
+          }
+          actions.push(reminderAction)
+          absenceActions.push(reminderAction)
+        }
+      }
+
+      totalConfidence += 0.92
+
+      // Debug trace per assenza
+      if (debug) {
+        addSentenceTrace(debugTrace, {
+          sentence,
+          intent: 'absence',
+          confidence: 0.92,
+          source: 'l0_pattern',
+          people: persons.map(p => p.name),
+          date, time,
+          timeRange: timeRange ? `${timeRange.start}–${timeRange.end}` : null,
+          actionsGenerated: absenceActions,
+          isAbsence: true,
+          warnings: !absentName ? ['absent_person_unknown'] : [],
+        })
+      }
+      continue
+    }
+
+    // ─── L0b1: Logistica con soggetto → calendar (intercetta prima di NLP/sinapsi) ───
+    if (logistics?.subject && logistics?.actionVerb) {
+      const luogo = extractLocation(sentence, members)
+      const activity = extractActivity(sentence)
+      const isPickup = logistics.actionVerb === 'prendere' || logistics.actionVerb === 'riprendere' || logistics.actionVerb === 'ritirare'
+      const isDropOff = logistics.actionVerb === 'portare'
+
+      let calTitle
+      if (logistics.driver && logistics.driver.id !== logistics.subject.id) {
+        // DUAL ACTION: driver + subject → calendario + task
+        if (isDropOff && activity) {
+          calTitle = luogo ? `${activity} ${logistics.subject.name} - ${luogo}` : `${activity} ${logistics.subject.name}`
+        } else if (isPickup) {
+          calTitle = luogo ? `Arrivo ${logistics.subject.name} - ${luogo}` : `Arrivo ${logistics.subject.name}`
+        } else {
+          calTitle = luogo ? `${activity || 'Impegno'} ${logistics.subject.name} - ${luogo}` : `${activity || 'Impegno'} ${logistics.subject.name}`
+        }
+
+        const calAction = {
+          type: 'calendar', date, title: calTitle,
+          assignedTo: logistics.subject.name, time,
+          category: activity ? 'sport' : 'logistica',
+          incomplete: !time ? 'Manca l\'orario' : undefined,
+        }
+        if (activity) calAction.activity = activity
+        if (isDropOff) { calAction.accompaniedBy = logistics.driver.name; calAction.needsPickup = true }
+        else { calAction.pickupBy = logistics.driver.name }
+        actions.push(calAction)
+        totalConfidence += 0.88
+
+        let taskTitle = isDropOff
+          ? (luogo ? `Portare ${logistics.subject.name} - ${luogo}` : `Portare ${logistics.subject.name}`)
+          : (luogo ? `Andare a prendere ${logistics.subject.name} - ${luogo}` : `Andare a prendere ${logistics.subject.name}`)
+        const taskAction = { type: 'task', date, title: taskTitle, assignedTo: logistics.driver.name, time }
+        actions.push(taskAction)
+        totalConfidence += 0.88
+
+        if (isDropOff) {
+          // Check: "e [NOME] la/lo riprende (alle HH)" nella stessa frase?
+          const _pickupRe = /\be\s+(\w+)\s+(?:(?:la|lo|li|le)\s+|l[''']\s*)?(?:riprende|va\s+a\s+prendere|viene\s+a\s+prendere)/i
+          const _pickupM = sentence.match(_pickupRe)
+          const _findMem = (n) => { if (!n) return null; const nl = n.toLowerCase(); return members.find(m => m.name.toLowerCase() === nl) || members.find(m => m.aliases?.some(a => a.toLowerCase() === nl)) || null }
+          const _pickupPerson = _pickupM ? _findMem(_pickupM[1]) : null
+          const _pickupTimeRe = /riprende(?:r.?)?\s+(?:alle?\s*)?(\d{1,2}(?:[:.]\d{2})?)\b/i
+          const _pickupTimeM = sentence.match(_pickupTimeRe)
+          const _pickupTime = _pickupTimeM ? (() => {
+              const _raw = _pickupTimeM[1]
+              if (_raw.includes(':') || _raw.includes('.')) return _raw.replace('.', ':').padStart(5, '0')
+              return _raw.padStart(2, '0') + ':00'
+            })() : null
+
+          if (_pickupPerson) {
+            calAction.pickupBy = _pickupPerson.name
+            calAction.needsPickup = false
+            // Se il tempo globale coincide col pickup time, l'evento danza non ha orario proprio
+            if (_pickupTime && time === _pickupTime) {
+              calAction.time = null
+              calAction.incomplete = "Manca l'orario di inizio"
+              // Anche il task portare non ha orario (è prima del pickup)
+              taskAction.time = null
+            }
+            const _pTitle = luogo ? `Riprendere ${logistics.subject.name} - ${luogo}` : `Riprendere ${logistics.subject.name}`
+            const _pickupTask = { type: 'task', date, title: _pTitle, assignedTo: _pickupPerson.name, time: _pickupTime }
+            actions.push(_pickupTask)
+            totalConfidence += 0.85
+          } else {
+            const reminderAction = { type: 'note', date, text: `Chi va a riprendere ${logistics.subject.name}${luogo ? ` da ${luogo}` : ''}?`, isReminder: true }
+            actions.push(reminderAction)
+            totalConfidence += 0.7
+          }
+        }
+
+        if (debug) {
+          addSentenceTrace(debugTrace, {
+            sentence, intent: 'calendar', confidence: 0.88, source: 'l0_logistics',
+            people: persons.map(p => p.name), date, time, amount: null,
+            location: luogo, activity: activity,
+            logistics: { driver: logistics.driver.name, subject: logistics.subject.name, verb: logistics.actionVerb },
+            actionsGenerated: actions.slice(-3), isDualAction: true,
+            warnings: [...sentenceWarnings, ...(time ? [] : ['missing_explicit_time']), ...(isDropOff ? ['needs_pickup_person'] : [])],
+          })
+        }
+        continue
+      } else {
+        // LOGISTICA COLLETTIVA: solo subject, no driver
+        if (isPickup) {
+          calTitle = luogo ? `Andare a prendere ${logistics.subject.name} - ${luogo}` : `Andare a prendere ${logistics.subject.name}`
+        } else if (isDropOff && activity) {
+          calTitle = luogo ? `${activity} ${logistics.subject.name} - ${luogo}` : `${activity} ${logistics.subject.name}`
+        } else {
+          calTitle = luogo ? `${activity || 'Impegno'} ${logistics.subject.name} - ${luogo}` : `${activity || 'Impegno'} ${logistics.subject.name}`
+        }
+
+        const calAction = {
+          type: 'calendar', date, title: calTitle,
+          assignedTo: logistics.subject.name, time,
+          location: luogo || null,
+          activity: activity || null,
+          category: activity ? 'sport' : 'logistica',
+          needsDriver: true,
+          logistics: { subject: logistics.subject.name, actionVerb: logistics.actionVerb },
+          incomplete: 'Manca chi accompagna/riprende',
+        }
+        actions.push(calAction)
+        totalConfidence += 0.85
+
+        if (debug) {
+          addSentenceTrace(debugTrace, {
+            sentence, intent: 'calendar', confidence: 0.85, source: 'l0_logistics',
+            people: persons.map(p => p.name), date, time, amount: null,
+            location: luogo, activity: activity,
+            logistics: { subject: logistics.subject.name, verb: logistics.actionVerb },
+            actionsGenerated: [calAction],
+            warnings: [...sentenceWarnings, 'needs_pickup_person', ...(time ? [] : ['missing_explicit_time'])],
+          })
+        }
+        continue
+      }
+    }
+
+    // ─── L0b2: Pattern "cena fuori / pranzo dai nonni" → calendar (evento sociale, non meal) ───
+    const socialDiningPatterns = [
+      /cen[ai]\s+(?:fuori|da[il]?\s|con\s|al\s|in\s)/i,
+      /pranzo\s+(?:fuori|da[il]?\s|con\s|al\s|in\s)/i,
+      /cen[ai]\s+(?:dai\s+|dalla\s+|dagli\s+)/i,
+      /pranzo\s+(?:dai\s+|dalla\s+|dagli\s+)/i,
+      // "grigliata con gli amici", "barbecue con i colleghi" → evento sociale
+      /(?:grigliata|grigliatina|barbecue|bbq)\s+con\s+/i,
+      /(?:cena|pranzo)\s+(?:al\s+ristorante|in\s+pizzeria|in\s+trattoria)/i,
+    ]
+    const isSocialDiningL0 = socialDiningPatterns.some(re => re.test(lower))
+    if (isSocialDiningL0) {
+      const action = buildAction('calendar', sentence, {
+        amount: null, date, time, persons, members, logistics, timeCtx,
+        category: 'famiglia',
+      })
+      // "di famiglia" / "tutti insieme" -> evento per tutta la famiglia
+      const isFamilyWide = /(?:di\s+famiglia|tutti\s+insieme|tutti\s+quanti|con\s+tutti|in\s+famiglia)/i.test(sentence)
+      if (isFamilyWide) {
+        action.assignedTo = 'Famiglia'
+        action.isFamily = true
+      }
+      actions.push(action)
+      totalConfidence += 0.85
+
+      if (debug) {
+        addSentenceTrace(debugTrace, {
+          sentence, intent: 'calendar', confidence: 0.85, source: 'l0_pattern',
+          people: persons.map(p => p.name), date, time, amount: null,
+          location: sentLocation, activity: sentActivity,
+          actionsGenerated: [action], warnings: sentenceWarnings,
+        })
+      }
+      continue
+    }
+
+    // ─── L0b3: Pattern "facciamo/ordiniamo + piatto" o "grigliatina in giardino" → meal ───
+    const mealDirectPatterns = [
+      /(?:facciamo|cuciniamo|prepariamo|ordiniamo)\s+(?:le?\s+|il\s+|la\s+|i\s+|gli\s+|un[oa]?\s+)?(?:pasta|pizza|risotto|lasagn[ea]|gnocchi|polpette|arrosto|grigliata|grigliatina|frittata|insalata|pollo|pesce|carne|sushi|carbonara|minestrone|minestra|zuppa|vellutata|parmigiana|tortellini|ravioli|tagliatelle|penne|spaghetti|hamburger|crepes|focaccia|piadina)/i,
+      /(?:grigliat[ai]na?|barbecue|bbq)\s+(?:in\s+|al\s+|a\s+)/i,
+      /(?:a\s+pranzo|a\s+cena)\s+(?:facciamo|prepariamo|cuciniamo)\s+/i,
+      // "cucina Chiara che io lavoro" — assegnazione cucina a qualcuno
+      /(?:sera|pranzo|cena|stasera)\s+cucin[aoei]\s+/i,
+      /\bcucin[aoei]\s+\w+\s+(?:che|perché|così|quindi|tanto)\b/i,
+    ]
+    const isDirectMeal = mealDirectPatterns.some(re => re.test(lower))
+    if (isDirectMeal) {
+      const action = buildAction('meal', sentence, {
+        amount: null, date, time, persons, members, logistics, timeCtx,
+        category: null,
+      })
+      actions.push(action)
+      totalConfidence += 0.88
+
+      if (debug) {
+        addSentenceTrace(debugTrace, {
+          sentence, intent: 'meal', confidence: 0.88, source: 'l0_pattern',
+          people: persons.map(p => p.name), date, time, amount: null,
+          location: sentLocation, activity: sentActivity,
+          actionsGenerated: [action], warnings: sentenceWarnings,
+        })
+      }
+      continue
+    }
+
+    // ─── L0c: Pattern "ricordami / avvisami" → reminder ───
+    const reminderDirectPatterns = [
+      /^(?:ricordami|avvisami|avvertimi|segnalami)\b/i,
+      /^(?:ricorda(?:mi|ci|temi)?)\s+(?:di|che|alle?|domani)/i,
+      /^(?:avvisa(?:mi|ci)?)\s+(?:di|che|alle?|domani|quando)/i,
+    ]
+    const isDirectReminder = reminderDirectPatterns.some(re => re.test(lower.trim()))
+    if (isDirectReminder) {
+      const action = buildAction('reminder', sentence, {
+        amount: null, date, time, persons, members, logistics, timeCtx,
+        category: 'promemoria',
+      })
+      actions.push(action)
+      totalConfidence += 0.88
+
+      // --- Scope notifica: 'mi' = personale, 'ci/temi/tevi' = famiglia ---
+      const _isForAll = /\b(?:ricordaci|ricordatemi|ricordatevi|avvisaci|avvisateci|avvertici)\b/i.test(lower)
+      const _notifyScope = _isForAll ? 'family' : 'personal'
+      action.notifyScope = _notifyScope
+
+      // --- DUAL ACTION: se il reminder contiene verbi di acquisto -> genera anche shopping ---
+      const _buyingRe = /\b(?:comprare|compra|acquistare|acquista|prendere|prendi)\s+/i
+      if (_buyingRe.test(lower)) {
+        const shoppingAction = buildAction('shopping', sentence, {
+          amount: null, date, time: null, persons, members, logistics, timeCtx,
+          category: null, currentMember,
+        })
+        shoppingAction.notifyScope = _notifyScope
+        // Categoria automatica per prodotti noti
+        const _lowerName = (shoppingAction.name || '').toLowerCase()
+        if (/latte|formaggio|yogurt|burro|panna|mozzarella/.test(_lowerName)) shoppingAction.category = 'latticini'
+        else if (/pane|pasta|farina|riso|biscotti|crackers|grissini/.test(_lowerName)) shoppingAction.category = 'pane_pasta'
+        else if (/acqua|succo|birra|vino|coca|aranciata|the|caff/.test(_lowerName)) shoppingAction.category = 'bevande'
+        else if (/pollo|carne|pesce|salmone|tonno|prosciutto|salame/.test(_lowerName)) shoppingAction.category = 'carne_pesce'
+        else if (/mela|banana|pomodor|insalata|verdur|frutta|zucchine|carote|patate/.test(_lowerName)) shoppingAction.category = 'frutta_verdura'
+        else if (/detersivo|sapone|shampoo|carta\s*igienica|spazzolino/.test(_lowerName)) shoppingAction.category = 'igiene'
+        else shoppingAction.category = 'altro'
+
+        actions.push(shoppingAction)
+        totalConfidence += 0.80
+        if (debug) console.log('[Brain] Dual action: reminder + shopping ->', shoppingAction.name, '(', shoppingAction.category, ')')
+      }
+
+      if (debug) {
+        addSentenceTrace(debugTrace, {
+          sentence, intent: 'reminder', confidence: 0.88, source: 'l0_pattern',
+          people: persons.map(p => p.name), date, time, amount: null,
+          location: sentLocation, activity: sentActivity,
+          actionsGenerated: actions.filter(a => a.type === 'reminder' || a.type === 'shopping'), warnings: sentenceWarnings,
+        })
+      }
+      continue
+    }
+
+    // ─── L0d: Pattern "non dimenticare / bisogna / serve / devo / iscrivere" → task ───
+    const taskDirectPatterns = [
+      /^(?:non\s+dimenticare?\s+(?:di\s+)?)/i,
+      /^(?:bisogna|occorre|tocca)\s+(?!andare\s+a\s+prendere)/i,
+      /^(?:serve|servono)\s+(?:prenotare|chiamare|fissare|organizzare|preparare|controllare|verificare)/i,
+      /^(?:devo|dobbiamo)\s+(?:parlare|chiamare|prenotare|iscrivere|firmare|portare\s+(?:il?|l[aoe])|rinnovare|pagare)/i,
+      /^(?:iscrivere|iscrizione|prenotare|fissare|rinnovare)\s+/i,
+      /^(?:preparare|consegnare|portare|lavare|stirare|pulire|controllare|organizzare|sistemare)\s+(?:il?|la|le|i|lo|gli|un[oa]?)\b/i,
+      // "deve studiare / deve fare i compiti" — compiti scolastici = task, non calendar
+      /\bdeve\s+(?:studiare|fare\s+i\s+compiti|ripassare|esercitarsi)\b/i,
+      // "da ritirare / da firmare / da consegnare" — azione pendente = task
+      /\bda\s+(?:ritirare|firmare|consegnare|compilare|restituire)\b/i,
+    ]
+    const isDirectTask = taskDirectPatterns.some(re => re.test(lower.trim()))
+    if (isDirectTask) {
+      const action = buildAction('task', sentence, {
+        amount: null, date, time, persons, members, logistics, timeCtx,
+        category: 'altro',
+      })
+      actions.push(action)
+      totalConfidence += 0.82
+
+      if (debug) {
+        addSentenceTrace(debugTrace, {
+          sentence, intent: 'task', confidence: 0.82, source: 'l0_pattern',
+          people: persons.map(p => p.name), date, time, amount: null,
+          location: sentLocation, activity: sentActivity,
+          actionsGenerated: [action], warnings: sentenceWarnings,
+        })
+      }
+      continue
+    }
+
+    // ─── L0e: "Arriva il tecnico / viene l'idraulico" → calendar (visita/appuntamento) ───
+    const visitorCalendarPatterns = [
+      /(?:arriva|viene|passa)\s+(?:il|la|l['']\s*)\s*(?:tecnico|idraulico|elettricista|muratore|imbianchino|corriere|postino|fattorino|pediatra|dottore|medico|giardiniere|installatore|operaio)\b/i,
+    ]
+    const isVisitorCalendar = visitorCalendarPatterns.some(re => re.test(lower))
+    if (isVisitorCalendar) {
+      const action = buildAction('calendar', sentence, {
+        amount: null, date, time, persons, members, logistics, timeCtx,
+        category: 'casa',
+      })
+      actions.push(action)
+      totalConfidence += 0.85
+
+      if (debug) {
+        addSentenceTrace(debugTrace, {
+          sentence, intent: 'calendar', confidence: 0.85, source: 'l0_pattern',
+          people: persons.map(p => p.name), date, time, amount: null,
+          location: sentLocation, activity: sentActivity,
+          actionsGenerated: [action], warnings: sentenceWarnings,
+        })
+      }
+      continue
+    }
+
+    // ─── L1: NLP.js (rete neurale) ───
+    let nlpType = null
+    let nlpCategory = null
+    let nlpScore = 0
+
+    if (isNlpReady()) {
+      try {
+        const nlpResult = await classify(sentence)
+        if (nlpResult.intent !== 'None' && nlpResult.score > 0.1) {
+          nlpScore = nlpResult.score
+          if (nlpResult.action) {
+            nlpType = nlpResult.action.type
+            nlpCategory = nlpResult.action.category
+          }
+        }
+      } catch (err) {
+        console.warn('[Brain] NLP.js classify error:', err)
+        if (debug) sentenceWarnings.push('nlp_classify_error')
+      }
+    } else {
+      if (debug) sentenceWarnings.push('nlp_not_ready')
+    }
+
+    // ─── L2: Sinapsi pesate ───
+    const activations = computeSynapseActivations(tokens, stems, allSynapses)
+
+    // Boost contesto temporale per meal (ma non se è cena sociale/fuori)
+    const isSocialDining = /cen[ai]\s+(?:fuori|da[li]?\s|con\s|al\s|in\s)/i.test(sentence) || /pranzo\s+(?:fuori|da[li]?\s|con\s|al\s|in\s)/i.test(sentence)
+    if (!isSocialDining && (timeCtx.period === 'sera' || /stasera|per\s+cena/i.test(sentence))) {
+      const mealAct = activations.get('meal')
+      if (mealAct) mealAct.score *= 1.3
+    }
+    // Se è cena/pranzo sociale → boost calendar
+    if (isSocialDining) {
+      if (!activations.has('calendar')) {
+        activations.set('calendar', { score: 0, keywords: [], categories: new Map() })
+      }
+      activations.get('calendar').score += 0.5
+      // De-boost meal
+      const mealAct = activations.get('meal')
+      if (mealAct) mealAct.score *= 0.4
+    }
+
+    // Boost strutturale: persona + orario/giorno = calendario
+    const todayStr = new Date().toISOString().slice(0, 10)
+    const hasExplicitDate = date !== todayStr
+    const hasTime = time !== null
+    const hasPersons = persons.length > 0
+    const structuralCalendarBoost = hasPersons && (hasTime || hasExplicitDate) && amount === null
+
+    if (structuralCalendarBoost) {
+      if (!activations.has('calendar')) {
+        activations.set('calendar', { score: 0, keywords: [], categories: new Map() })
+      }
+      const calAct = activations.get('calendar')
+      calAct.score += 0.6
+    }
+
+    // Trova migliore attivazione sinapsi
+    let synType = null
+    let synScore = 0
+    let synCategory = 'altro'
+    let synActivation = null
+
+    for (const [actionType, act] of activations) {
+      const normalized = act.keywords.length > 0
+        ? act.score / Math.sqrt(act.keywords.length)
+        : act.score
+      if (normalized > synScore) {
+        synScore = normalized
+        synType = actionType
+        synActivation = act
+      }
+    }
+
+    // Determina categoria sinapsi
+    if (synActivation && synActivation.categories.size > 0) {
+      let bestCat = 'altro', bestCatScore = 0
+      for (const [cat, score] of synActivation.categories) {
+        if (score > bestCatScore) { bestCatScore = score; bestCat = cat }
+      }
+      synCategory = bestCat
+    }
+
+    // Confidenza sinapsi (sigmoid)
+    const synConfidence = synScore > 0.2 ? 1 / (1 + Math.exp(-3 * (synScore - 0.4))) : 0
+
+    // Raccolta top sinapsi attivate per il debug
+    let topSynapsesFired = []
+    if (debug && synActivation) {
+      topSynapsesFired = synActivation.keywords
+        .sort((a, b) => b.weight - a.weight)
+        .slice(0, 8)
+        .map(k => ({ key: k.word, weight: Math.round(k.weight * 100) / 100, fuzzy: !!k.fuzzy }))
+    }
+
+    // ─── COMBINAZIONE L1 + L2 + segnali strutturali ───
+    let finalType = null
+    let finalCategory = 'altro'
+    let finalConfidence = 0
+    let decisionSource = null  // per debug: quale branch ha deciso
+
+    const structuralCalendar = hasPersons && (hasTime || hasExplicitDate) && amount === null
+
+    if (structuralCalendar && synType === 'calendar' && synConfidence > 0.3) {
+      finalType = 'calendar'
+      finalCategory = nlpCategory || synCategory || 'altro'
+      finalConfidence = Math.max(synConfidence, nlpScore, 0.80)
+      decisionSource = 'structural+l2_synapses'
+    } else if (structuralCalendar && nlpType === 'calendar') {
+      finalType = 'calendar'
+      finalCategory = nlpCategory || synCategory || 'altro'
+      finalConfidence = Math.max(nlpScore, 0.85)
+      decisionSource = 'structural+l1_nlp'
+    } else if (structuralCalendar && nlpType !== 'calendar' && nlpType !== 'expense') {
+      finalType = 'calendar'
+      finalCategory = synCategory || nlpCategory || 'altro'
+      finalConfidence = Math.max(synConfidence, 0.70)
+      decisionSource = 'structural_override'
+    } else if (nlpScore >= NLP_CONFIDENCE_HIGH) {
+      finalType = nlpType
+      finalCategory = nlpCategory || synCategory || 'altro'
+      finalConfidence = nlpScore
+      decisionSource = 'l1_nlp_high'
+    } else if (nlpScore >= NLP_CONFIDENCE_LOW && nlpType === synType) {
+      finalType = nlpType
+      finalCategory = nlpCategory || synCategory
+      finalConfidence = Math.min(0.95, nlpScore * 0.6 + synConfidence * 0.4 + 0.1)
+      decisionSource = 'l1+l2_combined'
+    } else if (nlpScore >= NLP_CONFIDENCE_LOW && synConfidence < 0.3) {
+      finalType = nlpType
+      finalCategory = nlpCategory || 'altro'
+      finalConfidence = nlpScore
+      decisionSource = 'l1_nlp_medium'
+    } else if (synConfidence >= SYNAPSE_CONFIDENCE_THRESHOLD) {
+      finalType = synType
+      finalCategory = synCategory
+      finalConfidence = synConfidence
+      decisionSource = 'l2_synapses'
+    } else if (nlpScore > synConfidence && nlpType) {
+      finalType = nlpType
+      finalCategory = nlpCategory || synCategory || 'altro'
+      finalConfidence = nlpScore
+      decisionSource = 'l1_nlp_best'
+    } else if (synType) {
+      finalType = synType
+      finalCategory = synCategory
+      finalConfidence = synConfidence
+      decisionSource = 'l2_synapses_fallback'
+    }
+
+    if (!finalType || finalConfidence < 0.15) {
+      // Debug: frase ignorata
+      if (debug) {
+        addSentenceTrace(debugTrace, {
+          sentence,
+          intent: null,
+          confidence: finalConfidence,
+          source: 'skipped',
+          people: persons.map(p => p.name),
+          date, time, amount: null,
+          location: sentLocation,
+          activity: sentActivity,
+          nlpIntent: nlpType, nlpScore,
+          synType, synConfidence,
+          synapsesFired: topSynapsesFired,
+          synCategory,
+          hasPersons, hasTime, hasExplicitDate, hasAmount: false,
+          calendarBoost: structuralCalendarBoost,
+          warnings: ['below_threshold', ...sentenceWarnings],
+        })
+      }
+      continue
+    }
+
+    // Override categoria per keyword forti (es. riunione -> lavoro)
+    if (finalType === 'calendar') {
+      finalCategory = resolveKeywordCategory(sentence, finalCategory)
+    }
+
+    // ─── Costruisci azione/i ───
+    const ctx = { amount, date, time, persons, members, logistics, timeCtx, category: finalCategory }
+    const sentenceActions = []
+
+    // DUAL ACTION: "X deve prendere/portare Y" → calendario per Y + task per X
+    console.log('[Brain] Check dual action:', { finalType, hasDriver: !!logistics?.driver, hasSubject: !!logistics?.subject, driverName: logistics?.driver?.name, subjectName: logistics?.subject?.name, actionVerb: logistics?.actionVerb })
+    let isDualAction = false
+
+    if (finalType === 'calendar' && logistics?.driver && logistics?.subject
+        && logistics.driver.id !== logistics.subject.id) {
+      isDualAction = true
+      console.log('[Brain] ✅ DUAL ACTION attivata! Calendar per', logistics.subject.name, '+ Task per', logistics.driver.name, '(verb:', logistics.actionVerb, ')')
+
+      const luogo = extractLocation(sentence, members)
+      const activity = extractActivity(sentence)
+      const isDropOff = logistics.actionVerb === 'portare'
+      const isPickup = logistics.actionVerb === 'prendere' || logistics.actionVerb === 'riprendere' || logistics.actionVerb === 'ritirare'
+
+      let calTitle
+      if (isDropOff && activity) {
+        calTitle = luogo ? `${activity} ${logistics.subject.name} - ${luogo}` : `${activity} ${logistics.subject.name}`
+      } else if (isPickup) {
+        calTitle = luogo ? `Arrivo ${logistics.subject.name} - ${luogo}` : `Arrivo ${logistics.subject.name}`
+      } else {
+        calTitle = luogo
+          ? `${activity || 'Impegno'} ${logistics.subject.name} - ${luogo}`
+          : `${activity || 'Impegno'} ${logistics.subject.name}`
+      }
+
+      const calAction = {
+        type: 'calendar',
+        date,
+        title: calTitle,
+        assignedTo: logistics.subject.name,
+        time,
+        category: finalCategory || (activity ? 'sport' : 'altro'),
+        incomplete: !time ? 'Manca l\'orario' : undefined,
+      }
+      if (isDropOff) {
+        calAction.accompaniedBy = logistics.driver.name
+        calAction.needsPickup = true
+      } else {
+        calAction.pickupBy = logistics.driver.name
+      }
+      actions.push(calAction)
+      sentenceActions.push(calAction)
+      totalConfidence += finalConfidence
+
+      let taskTitle
+      if (isDropOff) {
+        taskTitle = luogo
+          ? `Portare ${logistics.subject.name} - ${luogo}`
+          : `Portare ${logistics.subject.name}`
+      } else {
+        taskTitle = luogo
+          ? `Andare a prendere ${logistics.subject.name} - ${luogo}`
+          : `Andare a prendere ${logistics.subject.name}`
+      }
+
+      const taskAction = {
+        type: 'task',
+        date,
+        title: taskTitle,
+        assignedTo: logistics.driver.name,
+        time,
+      }
+      actions.push(taskAction)
+      sentenceActions.push(taskAction)
+      totalConfidence += finalConfidence
+
+            if (isDropOff) {
+        // Check: "e [NOME] la/lo riprende (alle HH)" nella stessa frase?
+        const _pickupRe2 = /\be\s+(\w+)\s+(?:(?:la|lo|li|le)\s+|l[''']\s*)?(?:riprende|va\s+a\s+prendere|viene\s+a\s+prendere)/i
+        const _pickupM2 = sentence.match(_pickupRe2)
+        const _findMem2 = (n) => { if (!n) return null; const nl = n.toLowerCase(); return members.find(m => m.name.toLowerCase() === nl) || members.find(m => m.aliases?.some(a => a.toLowerCase() === nl)) || null }
+        const _pickupPerson2 = _pickupM2 ? _findMem2(_pickupM2[1]) : null
+        const _pickupTimeRe2 = /riprende(?:r.?)?\s+(?:alle?\s*)?(\d{1,2}(?:[:.]\d{2})?)\b/i
+        const _pickupTimeM2 = sentence.match(_pickupTimeRe2)
+        const _pickupTime2 = _pickupTimeM2 ? (() => {
+              const _raw2 = _pickupTimeM2[1]
+              if (_raw2.includes(':') || _raw2.includes('.')) return _raw2.replace('.', ':').padStart(5, '0')
+              return _raw2.padStart(2, '0') + ':00'
+            })() : null
+
+        if (_pickupPerson2) {
+          calAction.pickupBy = _pickupPerson2.name
+          calAction.needsPickup = false
+          const _pTitle2 = luogo ? `Riprendere ${logistics.subject.name} - ${luogo}` : `Riprendere ${logistics.subject.name}`
+          const _pickupTask2 = { type: 'task', date, title: _pTitle2, assignedTo: _pickupPerson2.name, time: _pickupTime2 }
+          actions.push(_pickupTask2)
+          sentenceActions.push(_pickupTask2)
+          totalConfidence += 0.85
+        } else {
+          const reminderAction = {
+            type: 'note', date,
+            text: `Chi va a riprendere ${logistics.subject.name}${luogo ? ` da ${luogo}` : ``}? Orario ritorno da definire.`,
+            isReminder: true,
+          }
+          actions.push(reminderAction)
+          sentenceActions.push(reminderAction)
+          totalConfidence += 0.7
+        }
+      }// Warnings specifici per dual action
+      if (!time) sentenceWarnings.push('missing_explicit_time')
+      if (isDropOff) sentenceWarnings.push('needs_pickup_person')
+    } else if (finalType === 'calendar' && logistics?.subject && !logistics?.driver && logistics?.actionVerb) {
+      // LOGISTICA COLLETTIVA: "dobbiamo andare a prendere Asia in stazione"
+      // Subject c'è, driver non definito → evento calendar + task logistico senza driver
+      console.log('[Brain] Logistica collettiva:', logistics.subject.name, '—', logistics.actionVerb)
+      const luogo = extractLocation(sentence, members)
+      const activity = extractActivity(sentence)
+      const isPickup = logistics.actionVerb === 'prendere' || logistics.actionVerb === 'riprendere' || logistics.actionVerb === 'ritirare'
+      const isDropOff = logistics.actionVerb === 'portare'
+
+      let calTitle
+      if (isPickup) {
+        calTitle = luogo
+          ? `Andare a prendere ${logistics.subject.name} - ${luogo}`
+          : `Andare a prendere ${logistics.subject.name}`
+      } else if (isDropOff && activity) {
+        calTitle = luogo ? `${activity} ${logistics.subject.name} - ${luogo}` : `${activity} ${logistics.subject.name}`
+      } else {
+        calTitle = luogo
+          ? `${activity || 'Impegno'} ${logistics.subject.name} - ${luogo}`
+          : `${activity || 'Impegno'} ${logistics.subject.name}`
+      }
+
+      const calAction = {
+        type: 'calendar',
+        date,
+        title: calTitle,
+        assignedTo: logistics.subject.name,
+        time,
+        location: luogo || null,
+        category: finalCategory || (activity ? 'sport' : 'logistica'),
+        needsDriver: true,
+        logistics: { subject: logistics.subject.name, actionVerb: logistics.actionVerb },
+        incomplete: 'Manca chi accompagna/riprende',
+      }
+      actions.push(calAction)
+      sentenceActions.push(calAction)
+      totalConfidence += finalConfidence
+
+      sentenceWarnings.push('needs_pickup_person')
+      if (!time) sentenceWarnings.push('missing_explicit_time')
+    } else {
+      // Azione singola standard
+      const action = buildAction(finalType, sentence, ctx)
+      if (finalType === 'expense' && (!action.amount || action.amount <= 0)) continue
+      totalConfidence += finalConfidence
+      actions.push(action)
+      sentenceActions.push(action)
+
+      // Warnings per azione singola
+      if (finalType === 'calendar' && !time) sentenceWarnings.push('missing_explicit_time')
+      if (finalType === 'task' && !persons.length) sentenceWarnings.push('no_person_assigned')
+    }
+
+    // Debug trace per questa frase
+    if (debug) {
+      addSentenceTrace(debugTrace, {
+        sentence,
+        intent: finalType,
+        confidence: Math.round(finalConfidence * 100) / 100,
+        source: decisionSource,
+        people: persons.map(p => p.name),
+        date, time,
+        amount: null,
+        location: sentLocation,
+        activity: sentActivity,
+        logistics: logistics ? { driver: logistics.driver?.name, subject: logistics.subject?.name, verb: logistics.actionVerb } : null,
+        nlpIntent: nlpType,
+        nlpScore: Math.round(nlpScore * 100) / 100,
+        synType,
+        synConfidence: Math.round(synConfidence * 100) / 100,
+        synapsesFired: topSynapsesFired,
+        synCategory,
+        hasPersons, hasTime, hasExplicitDate, hasAmount: false,
+        calendarBoost: structuralCalendarBoost,
+        actionsGenerated: sentenceActions,
+        isDualAction,
+        warnings: sentenceWarnings,
+      })
+    }
+  }
+
+  if (actions.length === 0) return null
+
+  const avgConfidence = totalConfidence / actions.length
+
+  // ─── NORMALIZZAZIONE CANONICA ─────────────────────────────────
+  // Tutti i rami (L0 pattern, L1 NLP.js, L2 sinapsi) convergono qui.
+  // Il normalizzatore converte le shape legacy in canonical:
+  //   - assignedTo → personIds / assignedToId
+  //   - person → personId
+  //   - name → title
+  //   - time → timeStart
+  //   - accompaniedBy/pickupBy → logistics.{accompaniedById, pickupById}
+  //   - nomi → member ID (risoluzione in normalizer, non in executor)
+  // Il validatore scarta azioni malformate, le valide entrano in preview.
+  const normContext = {
+    familyId,
+    currentMemberId: currentMember?.id || null,
+    members: members,
+    source: 'L0',
+    textOriginal: text,
+    confidence: avgConfidence,
+    usedAI: false,
+  }
+
+  console.log('[Brain] Pre-normalize actions:', JSON.stringify(actions.map(a => ({ type: a.type, title: a.title, time: a.time, category: a.category }))))
+  const { actions: canonical, invalid, warnings: normWarnings } = normalizeAndValidateActions(actions, normContext)
+
+  console.log('[Brain] Post-normalize:', { canonical: canonical.length, invalid: invalid.length, invalidErrors: invalid.map(i => i.errors) })
+  if (invalid.length > 0) {
+    console.warn(`[Brain] ${invalid.length} azioni scartate dal validatore:`, invalid.map(i => i.errors))
+  }
+
+  if (canonical.length === 0) return null
+
+  const method = isNlpReady() ? 'NLP+Sinapsi' : 'Sinapsi'
+
+  return {
+    actions: canonical,
+    confidence: avgConfidence,
+    usedAI: false,
+    summary: `${canonical.length} ${canonical.length === 1 ? 'azione' : 'azioni'} (${method}, conf. ${(avgConfidence * 100).toFixed(0)}%)`,
+    _normalization: { invalid, warnings: normWarnings },
+  }
+}

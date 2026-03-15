@@ -1,0 +1,53 @@
+﻿---
+description: Dexie.js IndexedDB database conventions
+globs: "**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# Dexie.js Database Conventions
+
+## Schema
+- Define schema in a single `db.ts` file
+- Use auto-increment `++id` for primary keys
+- Define compound indexes with `[field1+field2]` syntax
+- Add `_version`, `_deleted`, `_device_id`, `updated_at` to all synced tables
+
+## Queries
+- Use `useLiveQuery()` from dexie-react-hooks for reactive queries
+- Always filter by `family_id` first (multi-family support)
+- Filter out `_deleted === true` records in all queries
+- Use `.where()` with indexed fields for performance
+
+## Transactions
+- Use `db.transaction('rw', ...)` for multi-table writes
+- Always increment `_version` on updates
+- Set `updated_at` to `new Date().toISOString()` on every write
+- For deletes: set `_deleted = true` (tombstone), don't actually delete
+
+## Migration
+- Use Dexie's `version(n).stores({...})` for schema changes
+- Never remove fields — only add new ones
+- Test migrations with existing data before release
+
+## Example Pattern
+```typescript
+// Query
+const expenses = useLiveQuery(
+  () => db.expenses
+    .where('[family_id+date]')
+    .between([familyId, startDate], [familyId, endDate])
+    .filter(e => !e._deleted)
+    .toArray(),
+  [familyId, startDate, endDate]
+);
+
+// Write
+await db.transaction('rw', db.expenses, async () => {
+  await db.expenses.put({
+    ...expense,
+    _version: (expense._version || 0) + 1,
+    updated_at: new Date().toISOString(),
+    _device_id: deviceId,
+  });
+});
+```

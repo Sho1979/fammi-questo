@@ -1,0 +1,3 @@
+import{j as e,z as a}from"./index-00vAZS4z.js";function d({isOpen:r,onConfirm:o,onCancel:t,title:s,message:l,confirmLabel:n="Conferma",danger:x=!1}){return e.jsxs(a,{isOpen:r,onClose:t,title:s,children:[e.jsx("p",{className:"mb-6 text-sm text-gray-600",children:l}),e.jsxs("div",{className:"flex gap-3",children:[e.jsx("button",{type:"button",onClick:t,className:`flex-1 rounded-xl border border-gray-300 px-4 py-2.5
+            text-sm font-medium text-gray-700 hover:bg-gray-50`,children:"Annulla"}),e.jsx("button",{type:"button",onClick:o,className:`flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-white
+            ${x?"bg-red-500 hover:bg-red-600":"bg-violet-600 hover:bg-violet-700"}`,children:n})]})]})}export{d as C};

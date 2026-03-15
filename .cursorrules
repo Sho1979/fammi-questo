@@ -1,0 +1,60 @@
+﻿# Family Manager — Cursor Rules for AI
+
+## Identità Progetto
+- **Nome**: Family Manager
+- **Tipo**: PWA (Progressive Web App) local-first per gestione spese e attività familiari
+- **Stack**: React 18 + Vite 5 + Tailwind CSS 3 + Zustand + Dexie.js + dexie-react-hooks
+- **Database locale**: IndexedDB via Dexie.js (source of truth)
+- **Sync**: Supabase come relay di blob cifrati AES-256-GCM
+- **AI**: Brain via Claude Haiku Edge Function (NLP italiano)
+- **Lingua UI**: Italiano
+- **Lingua codice**: Inglese (variabili, commenti, commit)
+
+## Gerarchia Documentale (LEGGERE IN ORDINE)
+Prima di scrivere QUALSIASI codice, leggi SEMPRE questi file nell'ordine indicato:
+
+1. `0_GOVERNANCE.md` — Regole meta, fonte di verità massima
+2. `1_MASTER_ARCHITECTURE.md` — Vincoli tecnici inviolabili
+3. `2_PRODUCT_SCOPE_V1.md` — Scope delle 3 release
+4. `3_BUILD_ORDER_CURSOR.md` — Ordine di build step-by-step
+5. `4_DATA_MODEL.md` — Entità, interfacce, constraint, indici
+6. `5_API_CONTRACTS.md` — Payload Brain AI, formato sync blob, backup
+
+Se un file di livello inferiore contraddice uno superiore, vince quello superiore.
+
+## Vincoli Architetturali Critici
+- **Local-first ASSOLUTO**: Dexie.js è il database. Nessuna query va a Supabase per dati utente.
+- **Crittografia**: AES-256-GCM con PBKDF2 (PIN + device_secret). Supabase riceve SOLO blob cifrati.
+- **Conflict Resolution**: Last-Write-Wins a 3 livelli: `_version → updated_at → device_id`
+- **Tombstone GC**: Check ogni 24h, purge tombstone > 30 giorni
+- **Nessun ORM server-side**: Solo Dexie.js client-side
+- **Ogni componente**: max 150 righe, altrimenti split
+
+## Release Strategy
+- **R1** (MVP): Spese + Budget (locale, no sync)
+- **R2**: Calendario + Tasks + Rewards + Backup (.fmbackup)
+- **R3**: Sync Supabase + Meals + Shopping + Brain AI
+
+## Convenzioni Codice
+- File components: PascalCase (`ExpenseForm.tsx`)
+- File utils/hooks: camelCase (`useExpenses.ts`)
+- Folder structure: `src/{components,hooks,stores,services,utils,types,pages}`
+- State management: Zustand per UI state, Dexie per persistent data
+- Styling: Tailwind utility classes, no CSS modules
+- Testing: Vitest + Testing Library
+- Commit: conventional commits in inglese
+
+## Workflow
+Quando ti chiedo di implementare uno step:
+1. Leggi `3_BUILD_ORDER_CURSOR.md` per trovare lo step corretto
+2. Verifica i vincoli in `1_MASTER_ARCHITECTURE.md`
+3. Consulta le interfacce in `4_DATA_MODEL.md`
+4. Implementa seguendo esattamente le specifiche
+5. Se hai dubbi, chiedi PRIMA di scrivere codice
+
+## ⚠️ DIVIETI
+- MAI aggiungere dipendenze non previste senza chiedere
+- MAI usare localStorage (solo IndexedDB via Dexie)
+- MAI fare fetch diretti a Supabase per dati utente (solo sync blob)
+- MAI modificare lo schema dati senza aggiornare `4_DATA_MODEL.md`
+- MAI saltare step nel build order

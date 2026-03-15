@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160" fill="none">
+  <!-- Fammi Questo Voice Ripple Logo — White version for dark backgrounds -->
+  <!-- Central circle -->
+  <circle cx="100" cy="80" r="18" fill="white"/>
+
+  <!-- Left arcs (white) - voice waves going left -->
+  <path d="M72 50 A45 45 0 0 0 72 110" stroke="white" stroke-width="8" stroke-linecap="round" fill="none"/>
+  <path d="M58 38 A60 60 0 0 0 58 122" stroke="white" stroke-width="7" stroke-linecap="round" fill="none" opacity="0.7"/>
+  <path d="M45 28 A75 75 0 0 0 45 132" stroke="white" stroke-width="6" stroke-linecap="round" fill="none" opacity="0.4"/>
+
+  <!-- Right arcs (coral/warm) - voice waves going right -->
+  <path d="M128 50 A45 45 0 0 1 128 110" stroke="#FFB8B8" stroke-width="8" stroke-linecap="round" fill="none"/>
+  <path d="M142 38 A60 60 0 0 1 142 122" stroke="#FFB8B8" stroke-width="7" stroke-linecap="round" fill="none" opacity="0.7"/>
+  <path d="M155 28 A75 75 0 0 1 155 132" stroke="#FFB8B8" stroke-width="6" stroke-linecap="round" fill="none" opacity="0.4"/>
+</svg>

@@ -1,0 +1,32 @@
+﻿---
+description: Family Manager project rules - always active
+globs:
+alwaysApply: true
+---
+
+# Family Manager — Project Rules
+
+## Identità Progetto
+PWA local-first per gestione spese e attività familiari.
+Stack: React 18 + Vite 5 + Tailwind CSS 3 + Zustand + Dexie.js
+
+## PRIMA di scrivere codice
+Leggi SEMPRE questi file nell'ordine:
+1. `0_GOVERNANCE.md` — Regole meta (autorità massima)
+2. `1_MASTER_ARCHITECTURE.md` — Vincoli tecnici inviolabili
+3. `3_BUILD_ORDER_CURSOR.md` — Ordine di build step-by-step
+4. `4_DATA_MODEL.md` — Schema entità e constraint
+5. `5_API_CONTRACTS.md` — Payload e formati
+
+## Vincoli inviolabili
+- Local-first: Dexie.js è il DB, nessuna query a Supabase per dati utente
+- Crittografia: AES-256-GCM, Supabase riceve SOLO blob cifrati
+- Conflict resolution: LWW 3 livelli (_version → updated_at → device_id)
+- Componenti: max 150 righe
+- Lingua UI: italiano | Lingua codice: inglese
+
+## Divieti
+- MAI aggiungere dipendenze non previste
+- MAI usare localStorage (solo IndexedDB via Dexie)
+- MAI saltare step nel build order
+- MAI modificare schema senza aggiornare 4_DATA_MODEL.md

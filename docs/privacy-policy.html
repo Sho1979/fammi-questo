@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fammi Questo — Privacy Policy</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.7;
+            color: #1A1A2E;
+            background: #FAFAF8;
+            padding: 2rem 1rem;
+            max-width: 720px;
+            margin: 0 auto;
+        }
+        h1 { color: #2D1B69; font-size: 1.8rem; margin-bottom: 0.5rem; }
+        h2 { color: #6C5CE7; font-size: 1.3rem; margin: 2rem 0 0.8rem; }
+        p, li { margin-bottom: 0.6rem; font-size: 1rem; }
+        ul { padding-left: 1.5rem; }
+        .update { color: #888; font-size: 0.9rem; margin-bottom: 2rem; }
+        .logo { font-size: 2rem; margin-bottom: 0.5rem; }
+        a { color: #6C5CE7; }
+        .highlight { background: #f0eeff; padding: 1rem; border-radius: 8px; margin: 1rem 0; }
+    </style>
+</head>
+<body>
+    <div class="logo">🗣️</div>
+    <h1>Privacy Policy</h1>
+    <p><strong>Fammi Questo</strong> — La famiglia organizzata, semplicemente</p>
+    <p class="update">Ultimo aggiornamento: 15 marzo 2026</p>
+
+    <div class="highlight">
+        <strong>In sintesi:</strong> I tuoi dati restano sul tuo telefono. Non li leggiamo, non li vendiamo, non li condividiamo. Se attivi la sincronizzazione cloud, i dati sensibili vengono crittografati prima di lasciare il dispositivo con chiavi che solo tu possiedi.
+    </div>
+
+    <h2>1. Chi siamo</h2>
+    <p>Fammi Questo è un'applicazione per l'organizzazione familiare sviluppata da Cristian (cristian.aziende@gmail.com). L'app è progettata con un'architettura "local-first": i dati vivono sul tuo dispositivo e il cloud è opzionale.</p>
+
+    <h2>2. Quali dati raccogliamo</h2>
+    <p><strong>Dati salvati localmente sul dispositivo:</strong></p>
+    <ul>
+        <li>Nomi dei membri della famiglia e ruoli</li>
+        <li>Spese, budget, eventi del calendario</li>
+        <li>Task, lista della spesa, inventario dispensa</li>
+        <li>Piani pasti e ricette</li>
+        <li>Punti e ricompense (gamification)</li>
+        <li>PIN di accesso (salvato come hash bcrypt, non in chiaro)</li>
+    </ul>
+    <p>Tutti questi dati sono salvati esclusivamente nella memoria locale del dispositivo (IndexedDB) e non vengono mai inviati a server esterni senza il tuo consenso esplicito.</p>
+
+    <h2>3. Sincronizzazione cloud (opzionale)</h2>
+    <p>Se scegli di attivare la sincronizzazione tra dispositivi:</p>
+    <ul>
+        <li>Viene creato un account anonimo (nessuna email, nessun nome) tramite Supabase</li>
+        <li>I campi sensibili (nomi, importi, note, descrizioni) vengono crittografati con <strong>AES-256-GCM</strong> prima di lasciare il dispositivo</li>
+        <li>La chiave di crittografia è derivata dal tuo PIN e da un segreto condiviso tra i tuoi dispositivi — non è mai salvata sul server</li>
+        <li>Sul server restano visibili solo dati strutturali (identificativi, date, versioni) necessari per la sincronizzazione</li>
+        <li>Né noi né il provider cloud possiamo leggere i contenuti dei tuoi dati</li>
+    </ul>
+    <p>Puoi disattivare la sincronizzazione in qualsiasi momento dalle Impostazioni dell'app.</p>
+
+    <h2>4. Assistente AI (opzionale)</h2>
+    <p>L'app include un assistente vocale ("Il Cervellone") che interpreta comandi in italiano. L'elaborazione avviene in tre modi:</p>
+    <ul>
+        <li><strong>Livello 0-2 (locale):</strong> Il testo viene elaborato interamente sul tuo dispositivo, senza alcuna connessione a internet</li>
+        <li><strong>Livello 3 (fallback cloud):</strong> Solo quando l'elaborazione locale non è sufficiente (confidenza inferiore al 55%), il testo del comando viene inviato a un servizio AI (Claude Haiku di Anthropic) tramite una funzione server sicura. Il testo non viene salvato né utilizzato per addestrare modelli AI</li>
+    </ul>
+    <p>L'uso del fallback AI è limitato a un massimo di 20 richieste giornaliere per famiglia.</p>
+
+    <h2>5. Dati che NON raccogliamo</h2>
+    <ul>
+        <li>Non raccogliamo email, numeri di telefono o dati identificativi reali</li>
+        <li>Non utilizziamo cookie di tracciamento</li>
+        <li>Non mostriamo pubblicità</li>
+        <li>Non vendiamo né condividiamo dati con terze parti</li>
+        <li>Non utilizziamo analytics o strumenti di tracciamento comportamentale</li>
+        <li>Non raccogliamo dati sulla posizione</li>
+    </ul>
+
+    <h2>6. Permessi dell'app</h2>
+    <ul>
+        <li><strong>Internet:</strong> necessario solo per la sincronizzazione cloud opzionale e il fallback AI</li>
+        <li><strong>Notifiche:</strong> per promemoria locali su task, eventi e scadenze dispensa</li>
+    </ul>
+
+    <h2>7. Sicurezza</h2>
+    <ul>
+        <li>PIN di accesso hashato con bcrypt (non recuperabile)</li>
+        <li>Crittografia AES-256-GCM per dati cloud con chiave derivata via PBKDF2 (200.000 iterazioni)</li>
+        <li>Comunicazioni protette via HTTPS</li>
+        <li>Row Level Security su Supabase: ogni famiglia vede solo i propri dati</li>
+        <li>Backup locale crittografato con formato proprietario (.fmbackup)</li>
+    </ul>
+
+    <h2>8. Cancellazione dati</h2>
+    <p>Puoi cancellare tutti i tuoi dati in qualsiasi momento dalle <strong>Impostazioni → Privacy e Dati → Cancella tutti i dati</strong>. La cancellazione è irreversibile e rimuove tutti i dati dal dispositivo. Se la sincronizzazione era attiva, i dati crittografati sul server vengono marcati come eliminati.</p>
+
+    <h2>9. Minori</h2>
+    <p>Fammi Questo è progettata per essere usata dall'intera famiglia, inclusi i minori. I profili dei bambini hanno accesso limitato in base all'età e sono sempre sotto il controllo di un genitore. Non raccogliamo dati personali identificativi di nessun utente, inclusi i minori.</p>
+
+    <h2>10. Modifiche alla policy</h2>
+    <p>Eventuali aggiornamenti a questa policy saranno pubblicati su questa pagina con la data di ultimo aggiornamento. Non sono previste notifiche push per modifiche alla policy, ma le variazioni saranno sempre consultabili qui.</p>
+
+    <h2>11. Contatti</h2>
+    <p>Per domande sulla privacy o richieste relative ai tuoi dati:</p>
+    <p>Email: <a href="mailto:cristian.aziende@gmail.com">cristian.aziende@gmail.com</a></p>
+
+    <hr style="margin: 2rem 0; border: none; border-top: 1px solid #ddd;">
+    <p style="color: #888; font-size: 0.85rem;">Fammi Questo &mdash; com.fammiquesto.app</p>
+</body>
+</html>
