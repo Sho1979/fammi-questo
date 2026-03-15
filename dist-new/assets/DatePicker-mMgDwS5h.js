@@ -1,2 +1,0 @@
-import{j as e}from"./index-00vAZS4z.js";function n({value:t,onChange:r,label:a="Data"}){return e.jsxs("div",{className:"flex flex-col gap-1",children:[e.jsx("label",{className:"text-sm font-medium text-gray-700",children:a}),e.jsx("input",{type:"date",value:t,onChange:o=>r(o.target.value),className:`rounded-xl border border-gray-300 px-3 py-2.5 text-sm text-gray-900
-          focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20`})]})}export{n as D};
