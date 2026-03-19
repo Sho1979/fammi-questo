@@ -1,0 +1,2090 @@
+{
+  "version": 1,
+  "generatedAt": "2026-03-19T23:55:54.127Z",
+  "familyId": "sim-family-001",
+  "totalDaysSimulated": 56,
+  "parserCorrectness": {
+    "totalPhrases": 424,
+    "correctParse": 244,
+    "accuracy": 0.5755,
+    "perAgent": {
+      "Asia": {
+        "total": 55,
+        "correct": 38,
+        "accuracy": 0.6909
+      },
+      "Cristian": {
+        "total": 106,
+        "correct": 58,
+        "accuracy": 0.5472
+      },
+      "Chiara": {
+        "total": 149,
+        "correct": 90,
+        "accuracy": 0.604
+      },
+      "Viola": {
+        "total": 90,
+        "correct": 51,
+        "accuracy": 0.5667
+      },
+      "Mariangela": {
+        "total": 18,
+        "correct": 2,
+        "accuracy": 0.1111
+      },
+      "Roberto": {
+        "total": 6,
+        "correct": 5,
+        "accuracy": 0.8333
+      }
+    },
+    "perIntent": {
+      "calendar": {
+        "total": 254,
+        "correct": 160,
+        "accuracy": 0.6299
+      },
+      "expense": {
+        "total": 17,
+        "correct": 16,
+        "accuracy": 0.9412
+      },
+      "task": {
+        "total": 69,
+        "correct": 27,
+        "accuracy": 0.3913
+      },
+      "meal": {
+        "total": 26,
+        "correct": 8,
+        "accuracy": 0.3077
+      },
+      "edit_action": {
+        "total": 49,
+        "correct": 29,
+        "accuracy": 0.5918
+      },
+      "shopping": {
+        "total": 5,
+        "correct": 0,
+        "accuracy": 0
+      },
+      "reminder": {
+        "total": 4,
+        "correct": 4,
+        "accuracy": 1
+      }
+    },
+    "perTruthConfidence": {
+      "high": {
+        "total": 333,
+        "correct": 234,
+        "accuracy": 0.7027
+      },
+      "medium": {
+        "total": 43,
+        "correct": 10,
+        "accuracy": 0.2326
+      },
+      "low": {
+        "total": 48,
+        "correct": 0,
+        "accuracy": 0
+      }
+    },
+    "falsePositiveRate": 0,
+    "falseNegativeRate": 0
+  },
+  "resolverOutcomes": {
+    "totalEditActions": 49,
+    "resolved": 0,
+    "ambiguous": 0,
+    "notFound": 0,
+    "avgConfidence": 0.8163,
+    "correctionSuccessRate": 0
+  },
+  "errorCauses": {
+    "breakdown": {
+      "parse_error": 178,
+      "false_positive": 2,
+      "false_negative": 0,
+      "resolve_error": 0
+    },
+    "topErrors": [
+      {
+        "text": "Dobbiamo decidere chi porta le bambine lunedi",
+        "agent": "Cristian",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.8112690421243832,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Ho finito i compiti di italiano",
+        "agent": "Viola",
+        "expected": "task",
+        "got": "shopping",
+        "confidence": 0.6248064744684292,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo comprare i libri di scuola per Viola e Asia",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "shopping",
+        "confidence": 0.772919641695748,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domani fforsee porto io Asia",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "calendar",
+        "confidence": 0.8,
+        "errorType": "false_positive",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Vi preparo la merenda per il primo giorno di scuola",
+        "agent": "Mariangela",
+        "expected": "calendar",
+        "got": "task",
+        "confidence": 0.7114645252895885,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Ho preso zaini e quaderni, 95 euro",
+        "agent": "Chiara",
+        "expected": "expense",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Vi preparo la merenda per il primo giorno di scuola",
+        "agent": "Mariangela",
+        "expected": "calendar",
+        "got": "task",
+        "confidence": 0.7114645252895885,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Sabato vado a dormire da Sofia",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domani nuoto?",
+        "agent": "Asia",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Devo comprare i libri di scuola per Viola e Asia",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "shopping",
+        "confidence": 0.772919641695748,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse venerdi non riesco a prendere Asia, vediamo come ci organizziamo",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Sabato mattina vado al tabacchino per la spesa",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Dobbiamo decidere chi porta le bambine lunedi",
+        "agent": "Cristian",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.8112690421243832,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Stasera preparo cotolette",
+        "agent": "Chiara",
+        "expected": "meal",
+        "got": "task",
+        "confidence": 0.5983012205474365,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo pensarci bene prima di prenotare dal dentista",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Domani nuoto?",
+        "agent": "Asia",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Sabato vado a dormire da Marco",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domani forse porto io Asia",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Domani forse porto io Mariangela",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Sabato vado a dormire da Marco",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse domani esco con Giulia",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "sabato ho catechismo",
+        "agent": "Asia",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Sabato mattina vado al dostributore per la spesa",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse domani esco con Emma",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Per domenica pensavo di fare arrosto con le patate, che ne dite",
+        "agent": "Mariangela",
+        "expected": "meal",
+        "got": "task",
+        "confidence": 0.5596624197239592,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Sabato mattina vado al tabacchino per la spesa",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo passare in ortopedico a prendere le medicine per Chiara",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.6982756318687834,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domani nuoto?",
+        "agent": "Asia",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "ho catechismo e' saltato, toglilo",
+        "agent": "Cristian",
+        "expected": "edit_action",
+        "got": "meal",
+        "confidence": 0.8907027799299647,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Sabato mattina vado al farmacia per la spesa",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      }
+    ],
+    "allErrors": [
+      {
+        "text": "Dobbiamo decidere chi porta le bambine lunedi",
+        "agent": "Cristian",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.8112690421243832,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Ho finito i compiti di italiano",
+        "agent": "Viola",
+        "expected": "task",
+        "got": "shopping",
+        "confidence": 0.6248064744684292,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo comprare i libri di scuola per Viola e Asia",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "shopping",
+        "confidence": 0.772919641695748,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domani fforsee porto io Asia",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "calendar",
+        "confidence": 0.8,
+        "errorType": "false_positive",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Vi preparo la merenda per il primo giorno di scuola",
+        "agent": "Mariangela",
+        "expected": "calendar",
+        "got": "task",
+        "confidence": 0.7114645252895885,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Ho preso zaini e quaderni, 95 euro",
+        "agent": "Chiara",
+        "expected": "expense",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Vi preparo la merenda per il primo giorno di scuola",
+        "agent": "Mariangela",
+        "expected": "calendar",
+        "got": "task",
+        "confidence": 0.7114645252895885,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Sabato vado a dormire da Sofia",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domani nuoto?",
+        "agent": "Asia",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Devo comprare i libri di scuola per Viola e Asia",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "shopping",
+        "confidence": 0.772919641695748,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse venerdi non riesco a prendere Asia, vediamo come ci organizziamo",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Sabato mattina vado al tabacchino per la spesa",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Dobbiamo decidere chi porta le bambine lunedi",
+        "agent": "Cristian",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.8112690421243832,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Stasera preparo cotolette",
+        "agent": "Chiara",
+        "expected": "meal",
+        "got": "task",
+        "confidence": 0.5983012205474365,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo pensarci bene prima di prenotare dal dentista",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Domani nuoto?",
+        "agent": "Asia",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Sabato vado a dormire da Marco",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domani forse porto io Asia",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Domani forse porto io Mariangela",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Sabato vado a dormire da Marco",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse domani esco con Giulia",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "sabato ho catechismo",
+        "agent": "Asia",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Sabato mattina vado al dostributore per la spesa",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse domani esco con Emma",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Per domenica pensavo di fare arrosto con le patate, che ne dite",
+        "agent": "Mariangela",
+        "expected": "meal",
+        "got": "task",
+        "confidence": 0.5596624197239592,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Sabato mattina vado al tabacchino per la spesa",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo passare in ortopedico a prendere le medicine per Chiara",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.6982756318687834,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domani nuoto?",
+        "agent": "Asia",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "ho catechismo e' saltato, toglilo",
+        "agent": "Cristian",
+        "expected": "edit_action",
+        "got": "meal",
+        "confidence": 0.8907027799299647,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Sabato mattina vado al farmacia per la spesa",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse lunedi non riesco a prendere Asia, vediamo come ci organizziamo",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Domani forse porto io Roberto",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Forse domani esco con Sofia",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Ho finito i comppiti  di inglese",
+        "agent": "Viola",
+        "expected": "task",
+        "got": "shopping",
+        "confidence": 0.8663637591485046,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo passare in pediatra a prendere le medicine per Viola",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.719717058460049,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Mi servono le scarpe da studio per martedi",
+        "agent": "Viola",
+        "expected": "task",
+        "got": "shopping",
+        "confidence": 0.5774097625192027,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Sabato vado a dormire da Sofia",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domani nuoto?",
+        "agent": "Asia",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Ho gia' fatto preparo cotolette",
+        "agent": "Chiara",
+        "expected": "edit_action",
+        "got": "task",
+        "confidence": 0.8056842498120146,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo passare in allergologo a prendere le medicine per Mariangela",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.5926665999540697,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse domani esco con Sofia",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Domani forse porto io Cristian",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Bisogna comprare pane, pane e pane prima di mercoledi",
+        "agent": "Chiara",
+        "expected": "shopping",
+        "got": "task",
+        "confidence": 0.835,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo pensarci bene prima di prenotare dal dentista",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Ho gia' fatto vi preparo la merenda",
+        "agent": "Cristian",
+        "expected": "edit_action",
+        "got": "task",
+        "confidence": 0.8009841269392338,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Porta anche il cartone, e' pieno",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "shopping",
+        "confidence": 0.6674532403561814,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Sabato vado a dormire da Emma",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Sabato mattina vado al meccanico per la spesa",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domenica alle 12:30 il pranzo e pronto, venite pure quando volete",
+        "agent": "Mariangela",
+        "expected": "calendar",
+        "got": "meal",
+        "confidence": 0.5601829968014089,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Per domenica pensavo di fare polpette della nonna, che ne dite",
+        "agent": "Mariangela",
+        "expected": "meal",
+        "got": "calendar",
+        "confidence": 0.6444455252117074,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Porta anche il cartone, e' pieno",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "shopping",
+        "confidence": 0.6674532403561814,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Forse domani esco con Marco",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Domani forse porto io Chiara",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Devo comprare le scarpette da danza nuove per Viola",
+        "agent": "Cristian",
+        "expected": "task",
+        "got": "shopping",
+        "confidence": 0.772919641695748,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse domani esco con Emma",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Servono le ciabatte per la piscina di Asia",
+        "agent": "Cristian",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.6186341735959626,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo pensarci bene prima di prenotare dal pediatra",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Devo pensarci bene prima di prenotare dal allergologo",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "sabato ho catechismo",
+        "agent": "Asia",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Mamma mi ha detto di apparecchiare",
+        "agent": "Asia",
+        "expected": "task",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo passare in ortopedico a prendere le medicine per Chiara",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.6982756318687834,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo passare in ortopedico a prendere le medicine per Chiara",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.6982756318687834,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "vi preparo la merenda e' fatto, toglilo",
+        "agent": "Chiara",
+        "expected": "edit_action",
+        "got": "task",
+        "confidence": 0.7979096399917652,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domani forse porto io Asia",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Forse mercoledi non riesco a prendere Asia, vediamo come ci organizziamo",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Forae domani esco con Marcco",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "calendar",
+        "confidence": 0.379111003128643,
+        "errorType": "false_positive",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Devo pensarci bene prima di prenotare dal oculista",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Sabato mattina vado al Conad per la spesa",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse domenica non riesco a prendere Asia, vediamo come ci organizziamo",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "pensavo di fare polpette della nonna va spostato a martedì",
+        "agent": "Cristian",
+        "expected": "edit_action",
+        "got": "calendar",
+        "confidence": 0.8305232289836169,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Stasera preparo pasta al pesto",
+        "agent": "Chiara",
+        "expected": "meal",
+        "got": "task",
+        "confidence": 0.9812655024325102,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domenica preparo parmigiana di melanzane per tutta la famiglia",
+        "agent": "Mariangela",
+        "expected": "meal",
+        "got": "task",
+        "confidence": 0.7513061272315604,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "vi preparo la merenda e' fatto, toglilo",
+        "agent": "Chiara",
+        "expected": "edit_action",
+        "got": "task",
+        "confidence": 0.7979096399917652,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo comprare le scarpette da danza nuove per Viola",
+        "agent": "Cristian",
+        "expected": "task",
+        "got": "shopping",
+        "confidence": 0.772919641695748,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Sabato mattina vado al supermercato per la spesa",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse domani esco con Giulia",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Devo pensarci bene prima di prenotare dal oculista",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Mi servono le scarpe da studio per venerdi",
+        "agent": "Viola",
+        "expected": "task",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse domani esco con Marco",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "ho la verifica di scienze e' saltato, toglilo",
+        "agent": "Cristian",
+        "expected": "edit_action",
+        "got": "calendar",
+        "confidence": 0.9239401641854963,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo passare in ortopedico a prendere le medicine per Asia",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.7021529972355532,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Mamma mi ha detto di mettere in ordine",
+        "agent": "Asia",
+        "expected": "task",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Bisogna comprare latte, latte e latte prima di sabato",
+        "agent": "Chiara",
+        "expected": "shopping",
+        "got": "task",
+        "confidence": 0.835,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Sabato vado a dormire da Sofia",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo pensarci bene prima di prenotare dal ortopedico",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Ho gia' fatto ho finito i compiti",
+        "agent": "Chiara",
+        "expected": "edit_action",
+        "got": "shopping",
+        "confidence": 0.6248064744684292,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Sabato vado a dormire da Sofia",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Sabato vado a dormire da Emma",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo passare in ortopedico a prendere le medicine per Viola",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.719717058460049,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domenica preparo ragu della domenica per tutta la famiglia",
+        "agent": "Mariangela",
+        "expected": "meal",
+        "got": "task",
+        "confidence": 0.7334516503402972,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Ho gia' fatto abbiamo i compiti di",
+        "agent": "Cristian",
+        "expected": "edit_action",
+        "got": "task",
+        "confidence": 0.9832453586561727,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Per domenica pensavo di fare polpette della nonna, che ne dite",
+        "agent": "Mariangela",
+        "expected": "meal",
+        "got": "calendar",
+        "confidence": 0.6444455252117074,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Papa mi aiuti con i compiti di matematica?",
+        "agent": "Viola",
+        "expected": "task",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Ho gia' fatto preparo pasta al pesto",
+        "agent": "Cristian",
+        "expected": "edit_action",
+        "got": "task",
+        "confidence": 0.7641842429910828,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "sabato ho catechismo",
+        "agent": "Asia",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Bisogna comprare verdura, verdura e verdura prima di sabato",
+        "agent": "Chiara",
+        "expected": "shopping",
+        "got": "task",
+        "confidence": 0.666090741384538,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Ho gia' fatto ho finito i compiti",
+        "agent": "Cristian",
+        "expected": "edit_action",
+        "got": "shopping",
+        "confidence": 0.6248064744684292,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse domani esco con Emma",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Ho la verifica di italiano giovedi",
+        "agent": "Viola",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.9571203556767799,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Lo faccio dopo cena",
+        "agent": "Viola",
+        "expected": "task",
+        "got": "meal",
+        "confidence": 0.5468870399822974,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Domani nuoto?",
+        "agent": "Asia",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Sabato mattina vado al Conad per la spesa",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse domani esco con Marco",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Devo passare in ortopedico a prendere le medicine per Cristian",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.6982756318687834,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo pensarci bene prima di prenotare dal oculista",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Sabato vado a dormire da Emma",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Sabato vado a dormire da Sofia",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "sabato ocatechismo",
+        "agent": "Asia",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Sabato mattina vado al meccanico per la spesa",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domenica preparo zuppa di legumi per tutta la famiglia",
+        "agent": "Mariangela",
+        "expected": "meal",
+        "got": "task",
+        "confidence": 0.7513061272315604,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Ho gia' fatto vi preparo la merenda",
+        "agent": "Chiara",
+        "expected": "edit_action",
+        "got": "task",
+        "confidence": 0.8009841269392338,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domani forse porto io Asia",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Bisogna comprare verdura, verdura e verdura prima di mercoledi",
+        "agent": "Chiara",
+        "expected": "shopping",
+        "got": "task",
+        "confidence": 0.8251274274610403,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Papa mi aiuti con i compiti di matematica?",
+        "agent": "Viola",
+        "expected": "task",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Domani forse porto io Viola",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Forse venerdi non riesco a prendere Asia, vediamo come ci organizziamo",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Devo pensarci bene prima di prenotare dal oculista",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Ho gia' fatto abbiamo i compiti di",
+        "agent": "Cristian",
+        "expected": "edit_action",
+        "got": "task",
+        "confidence": 0.9832453586561727,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Ho messo in ordine",
+        "agent": "Asia",
+        "expected": "task",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domani forse porto io Cristian",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Bisogna comprare pane, pane e pane prima di giovedi",
+        "agent": "Chiara",
+        "expected": "shopping",
+        "got": "task",
+        "confidence": 0.835,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domano forse porto io Asia",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Mi servono le scarpe da studio per giovedi",
+        "agent": "Viola",
+        "expected": "task",
+        "got": "shopping",
+        "confidence": 0.5531444946380928,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Sabato mattina vado al tabacchino per la spesa",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domani nuoto?",
+        "agent": "Asia",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "fuori la spazzatura e' fatto, toglilo",
+        "agent": "Cristian",
+        "expected": "edit_action",
+        "got": "task",
+        "confidence": 0.9902181527112265,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Sabato mattina vado al meccanico per la spesa",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Per domenica pensavo di fare lasagna, che ne dite",
+        "agent": "Mariangela",
+        "expected": "meal",
+        "got": "task",
+        "confidence": 0.5413396240357008,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "compiti con le bambine e' fatto, toglilo",
+        "agent": "Cristian",
+        "expected": "edit_action",
+        "got": "task",
+        "confidence": 0.747934605843578,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Stasera preparo pollo arrosto",
+        "agent": "Chiara",
+        "expected": "meal",
+        "got": "task",
+        "confidence": 0.9704765077376122,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Posso andare alla festa di Halloween da Giulia?",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Devo pensarci bene prima di prenotare dal pediatra",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Devo comprare i costumi di Halloween per le bambine",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "shopping",
+        "confidence": 0.8635579261246108,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo passare in allergologo a prendere le medicine per Chiara",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.5926665999540697,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Servono le gomme invernali, prenoto dal gommista",
+        "agent": "Cristian",
+        "expected": "task",
+        "got": "shopping",
+        "confidence": 0.7323045262302966,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domani forse porto io Roberto",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Domani nuoto?",
+        "agent": "Asia",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Non ho voglia di cucinare stasera",
+        "agent": "Chiara",
+        "expected": "meal",
+        "got": "task",
+        "confidence": 0.6315332230241724,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Porto le castagne per le bambine",
+        "agent": "Mariangela",
+        "expected": "meal",
+        "got": "calendar",
+        "confidence": 0.8102899032956946,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Forse lunedi non riesco a prendere Asia, vediamo come ci organizziamo",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Passo io a prendere le pizze",
+        "agent": "Cristian",
+        "expected": "meal",
+        "got": "shopping",
+        "confidence": 0.6024665142396441,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Devo passare in oculista a prendere le medicine per Roberto",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.7021529972355532,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "abbiamo i compiti di e' fatto, toglilo",
+        "agent": "Cristian",
+        "expected": "edit_action",
+        "got": "task",
+        "confidence": 0.9891301403130455,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo passare in ortopedico a prendere le medicine per Asia",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.7021529972355532,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domani forse porto io Viola",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Forse domenica mia riesco a prendere Asia, vediamo come ci organizziamo",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "sabato ho catechismo",
+        "agent": "Asia",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse martedi non riesco a prendere Asia, vediamo come ci organizziamo",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Sabato vado a dormire da Sofia",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "sabato ho catechismo",
+        "agent": "Asia",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Ci vado io, non vi preoccupate",
+        "agent": "Roberto",
+        "expected": "calendar",
+        "got": "note",
+        "confidence": 0.45,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Domani non riesco a prendere le bambine a scuola",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Devo pensarci bene prima di prenotare dal ortopedico",
+        "agent": "Chiara",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Devo passare in allergologo a prendere le medicine per Cristian",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.5926665999540697,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse domani esco con Marco",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "bisogna comprare latte e' fatto, toglilo",
+        "agent": "Chiara",
+        "expected": "edit_action",
+        "got": "task",
+        "confidence": 0.82,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Domenica preparo polpette della nonna per tutta la famiglia",
+        "agent": "Mariangela",
+        "expected": "meal",
+        "got": "calendar",
+        "confidence": 0.8388910504234147,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Sabato mattina vado al distributore per la spesa",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Per domenica pensavo di fare gnocchi al sugo, che ne dite",
+        "agent": "Mariangela",
+        "expected": "meal",
+        "got": "task",
+        "confidence": 0.6035107221226683,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Devo passare in ortopedico a prendere le medicine per Chiara",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.6982756318687834,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Mi servono le scarpe da daza per venerdi",
+        "agent": "Viola",
+        "expected": "task",
+        "got": "shopping",
+        "confidence": 0.6775150812982639,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo comprare i costumi di Halloween per le bambine",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "shopping",
+        "confidence": 0.8635579261246108,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Posso andare alla festa di Halloween da Giulia?",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Forse domani esco con Marco",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Porto le castagne per le bambine",
+        "agent": "Mariangela",
+        "expected": "meal",
+        "got": "calendar",
+        "confidence": 0.8102899032956946,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Servono le gomme invernali, prenoto dal gommista",
+        "agent": "Cristian",
+        "expected": "task",
+        "got": "shopping",
+        "confidence": 0.7323045262302966,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Ho gia' fatto abbiamo i compiti di",
+        "agent": "Chiara",
+        "expected": "edit_action",
+        "got": "task",
+        "confidence": 0.9832453586561727,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Sabato mattina vado al supermercato per la spesa",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse domani esco con Marco",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Mamma mi ha detto di rifare il letto",
+        "agent": "Asia",
+        "expected": "task",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse domani esco con Marco",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Devo passare in oculista a prendere le medicine per Chiara",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.7021529972355532,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Forse domani esco con Emma",
+        "agent": "Viola",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "Domani forse porto io Viola",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "low"
+      },
+      {
+        "text": "abbiamo i compiti di e' fatto, toglilo",
+        "agent": "Cristian",
+        "expected": "edit_action",
+        "got": "task",
+        "confidence": 0.9891301403130455,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "ho finito i compiti e' fatto, toglilo",
+        "agent": "Chiara",
+        "expected": "edit_action",
+        "got": "shopping",
+        "confidence": 0.6519969737169465,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Per domenica pensavo di fare ragu della domenica, che ne dite",
+        "agent": "Mariangela",
+        "expected": "meal",
+        "got": "task",
+        "confidence": 0.5658574888760928,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      },
+      {
+        "text": "Sabato mattina vado al ferramenta per la spesa",
+        "agent": "Cristian",
+        "expected": "calendar",
+        "got": "none",
+        "confidence": 0,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Devo passare in ortopedico a prendere le medicine per Chiara",
+        "agent": "Chiara",
+        "expected": "task",
+        "got": "calendar",
+        "confidence": 0.6982756318687834,
+        "errorType": "parse_error",
+        "truthConfidence": "high"
+      },
+      {
+        "text": "Per domenica pensavo di fare arrosto con le patate, che ne dite",
+        "agent": "Mariangela",
+        "expected": "meal",
+        "got": "task",
+        "confidence": 0.5596624197239592,
+        "errorType": "parse_error",
+        "truthConfidence": "medium"
+      }
+    ]
+  },
+  "crossAgentCoherence": {
+    "totalCrossAgent": 32,
+    "coherent": 2,
+    "incoherent": 30,
+    "coherenceRate": 0.0625
+  },
+  "learningCurve": {
+    "weeklyAccuracy": [
+      {
+        "week": 1,
+        "accuracy": 0.449
+      },
+      {
+        "week": 2,
+        "accuracy": 0.5294
+      },
+      {
+        "week": 3,
+        "accuracy": 0.5962
+      },
+      {
+        "week": 4,
+        "accuracy": 0.5833
+      },
+      {
+        "week": 5,
+        "accuracy": 0.6667
+      },
+      {
+        "week": 6,
+        "accuracy": 0.6042
+      },
+      {
+        "week": 7,
+        "accuracy": 0.5469
+      },
+      {
+        "week": 8,
+        "accuracy": 0.6182
+      }
+    ],
+    "firstWeekAccuracy": 0.449,
+    "lastWeekAccuracy": 0.6182,
+    "improvement": 0.1692,
+    "synapsesLearned": 0,
+    "synapsesConfirmed": 0
+  },
+  "top5Fixes": {
+    "fixes": [
+      {
+        "problem": "calendar->none confusion [parse_error] (e.g. \"Sabato vado a dormire da Sofia\")",
+        "frequency": 88,
+        "impact": "high",
+        "effort": "medium"
+      },
+      {
+        "problem": "task->calendar confusion [parse_error] (e.g. \"Dobbiamo decidere chi porta le bambine lunedi\")",
+        "frequency": 19,
+        "impact": "high",
+        "effort": "medium"
+      },
+      {
+        "problem": "task->shopping confusion [parse_error] (e.g. \"Ho finito i compiti di italiano\")",
+        "frequency": 15,
+        "impact": "high",
+        "effort": "medium"
+      },
+      {
+        "problem": "edit_action->task confusion [parse_error] (e.g. \"Ho gia' fatto preparo cotolette\")",
+        "frequency": 14,
+        "impact": "high",
+        "effort": "medium"
+      },
+      {
+        "problem": "meal->task confusion [parse_error] (e.g. \"Stasera preparo cotolette\")",
+        "frequency": 12,
+        "impact": "high",
+        "effort": "medium"
+      }
+    ]
+  }
+}
