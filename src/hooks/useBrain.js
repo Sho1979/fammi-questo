@@ -625,11 +625,14 @@ export default function useBrain() {
       case 'edit_action': {
         const target = action.resolved?.selectedRecord || action.resolved?.matchedRecord
         if (!target) {
+          console.log('[Brain] edit_action execute: no target selected', { verb: action.verb, status: action.resolved?.status })
           return { msg: `${action.verb}: nessun record selezionato`, record: null }
         }
 
+        const wasUserSelected = !!action.resolved?.selectedRecord
         const verb = action.verb
         const domain = action.resolved?.resolverTrace?.searchDomains?.[0] || 'events'
+        console.log('[Brain] edit_action execute:', { verb, domain, targetId: target.id, targetTitle: target.title, wasUserSelected, resolutionSource: action.resolved?.resolutionSource })
 
         if (verb === 'delete') {
           if (domain === 'events' || target.time_start !== undefined) {

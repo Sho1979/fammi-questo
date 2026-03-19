@@ -481,7 +481,9 @@ describe('Golden E2E #4: Memory multi-turno (simulated)', () => {
 
     const cal = actions[0]
     expect(cal.timeStart).toBe('15:00')
-    expect(cal.incomplete).toBeNull()
+    // incomplete is set because Asia is a child + medico category → needs logistics
+    expect(cal.incomplete).toBe('Chi porta/riprende? Da definire')
+    expect(cal.needsPickup).toBe(true)
     expect(cal.personIds).toContain('mem_asia')
     expect(cal.location).toBe('Studio Bianchi')
     expect(cal.source).toBe('memory')
@@ -499,7 +501,8 @@ describe('Golden E2E #4: Memory multi-turno (simulated)', () => {
     expect(db.person_id).toBe('mem_asia')
     expect(db.time_start).toBe('15:00')
     expect(db.category).toBe('medico')
-    expect(db.incomplete).toBeNull()
+    // incomplete is set: child + medico → needs logistics
+    expect(db.incomplete).toBe('Chi porta/riprende? Da definire')
   })
 })
 

@@ -10,6 +10,7 @@
  */
 
 import { db } from '../localDb.js'
+import { isDebugEnabled } from './debugLogger.js'
 
 // ═══════════════════════════════════════════════════════════════
 // SCORING
@@ -315,6 +316,42 @@ export async function resolveEditAction(familyId, editAction, members) {
       selectedId: matchedRecord?.id || null,
       reason: status === 'resolved' ? 'single_match' : status,
     },
+  }
+
+  // ─── LOGGING ───
+  const resolverLog = {
+    verb: editAction.verb,
+    targetType,
+    status,
+    candidatesFound: topCandidates.length,
+    topScore: topCandidates[0]?.score || 0,
+    matchedId: matchedRecord?.id || null,
+    matchedTitle: matchedRecord?.title || matchedRecord?.name || null,
+    searchDomains,
+    titleHint: search.titleHintNorm,
+    dateHint: search.dateNorm,
+    personHint: search.personNameRaw || null,
+  }
+
+  console.log('[Resolver]', status, resolverLog)
+
+  // Persist to nlpLogs if debug enabled
+  if (isDebugEnabled() && familyId) {
+    try {
+      await db.nlpLogs.add({
+        id: crypto.randomUUID(),
+        family_id: familyId,
+        input: editAction._textOriginal || editAction.textOriginal || '',
+        result_intent: `resolver_${status}`,
+        confidence: resolved.resolutionConfidence,
+        action_count: topCandidates.length,
+        used_ai: false,
+        debug_json: JSON.stringify({ resolver: resolverLog, resolved }),
+        created_at: new Date().toISOString(),
+      })
+    } catch (err) {
+      console.warn('[Resolver] Log persistence failed:', err)
+    }
   }
 
   return { ...editAction, resolved }
