@@ -754,3 +754,43 @@ function fuzzyActivityMatch(lower) {
   }
   return null
 }
+
+// ═══════════════════════════════════════════════════════════════
+// IMPLICIT PERSON RESOLUTION (for resolver)
+// ═══════════════════════════════════════════════════════════════
+/**
+ * Resolve implicit person references by role/relationship.
+ * "nonna" → elder female member
+ * "mamma" → parent female member
+ * "papà"/"papa" → parent male member
+ *
+ * Uses members array directly — no DB query needed.
+ *
+ * @param {string} nameHint
+ * @param {Array<{id, name, role, gender, aliases}>} members
+ * @returns {{ best: Object|null, confidence: number }}
+ */
+export function resolveImplicitPerson(nameHint, members) {
+  if (!nameHint || !members?.length) return { best: null, confidence: 0 }
+
+  const lower = nameHint.toLowerCase().trim()
+  const isFemale = (m) => m.gender === 'F' || /a$/i.test(m.name)
+  const isMale = (m) => m.gender === 'M' || !isFemale(m)
+
+  const IMPLICIT_MAP = [
+    { terms: ['nonna', 'dalla nonna'], filter: m => (m.role === 'nonno' || m.role === 'nonna' || m.role === 'elder') && isFemale(m) },
+    { terms: ['nonno', 'dal nonno'], filter: m => (m.role === 'nonno' || m.role === 'nonna' || m.role === 'elder') && isMale(m) },
+    { terms: ['mamma', 'dalla mamma'], filter: m => (m.role === 'genitore' || m.role === 'parent') && isFemale(m) },
+    { terms: ['papà', 'papa', 'dal papà', 'dal papa'], filter: m => (m.role === 'genitore' || m.role === 'parent') && isMale(m) },
+  ]
+
+  for (const { terms, filter } of IMPLICIT_MAP) {
+    if (terms.includes(lower)) {
+      const matches = members.filter(filter)
+      if (matches.length === 1) return { best: matches[0], confidence: 0.85 }
+      if (matches.length > 1) return { best: matches[0], confidence: 0.5 }
+    }
+  }
+
+  return { best: null, confidence: 0 }
+}
