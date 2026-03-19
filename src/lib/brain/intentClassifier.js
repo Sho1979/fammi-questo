@@ -366,6 +366,13 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       /(?:ha\s+la\s+febbre|sta\s+male|si\s+sente\s+male|è\s+malat[oa]|sta\s+poco\s+bene|non\s+si\s+sente\s+bene)/i,
       /\bfebbre\s+\w+\b/i,
       /\b(?:è\s+malat[oa]|malat[oa])\b/i,
+      // "hanno cancellato la lezione/gita/partita" → assenza/cancellazione evento
+      /\b(?:hanno\s+cancellato|è\s+stat[oa]\s+cancellat[oa]|annullat[oa]|sospesa?|rinviat[oa])\s+(?:la\s+|il\s+|lo\s+|l['']\s*)?(?:lezione|gita|partita|gara|allenamento|corso|recita|riunione|attività|saggio)\b/i,
+      /\b(?:cancellat[oa]|annullat[oa]|sospesa?|rinviat[oa])\s+(?:la\s+|il\s+|lo\s+|l['']\s*)?(?:lezione|gita|partita|gara|allenamento|corso|recita|riunione|attività|saggio)\b/i,
+      // "non viene questa settimana" — persona/servizio che non viene
+      /\bnon\s+viene\s+(?:questa|questa\s+settimana|oggi|domani|lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica)\b/i,
+      // "non c'è / non c e" con soggetto persona
+      /\bnon\s+c\s*[''e]\s*(?:è\s+)?(?:la\s+mattina|il\s+pomeriggio|domani|oggi|lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica)\b/i,
     ]
     const isAbsence = absencePatterns.some(re => re.test(lower))
     if (isAbsence) {
@@ -818,6 +825,48 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       if (debug) {
         addSentenceTrace(debugTrace, {
           sentence, intent: 'calendar', confidence: 0.85, source: 'l0_pattern',
+          people: persons.map(p => p.name), date, time, amount: null,
+          location: sentLocation, activity: sentActivity,
+          actionsGenerated: [action], warnings: sentenceWarnings,
+        })
+      }
+      continue
+    }
+
+    // ─── L0f: Pattern shopping RESTRITTIVO ───
+    // Posizionato DOPO reminder (L0c) e task (L0d) per non rubare i loro match.
+    // Cattura SOLO: lista spesa esplicita, "al supermercato/Lidl/Coop", quantità tipiche,
+    // "compra/prendi + grocery item" SENZA verbi task/reminder a inizio frase.
+    const GROCERY_RE = /\b(?:pane|latte|uova|formaggio|burro|mozzarella|prosciutto|salame|mortadella|yogurt|farina|zucchero|olio|aceto|pannolini|nurofen|tachipirina|detersivo|sapone|shampoo|carta\s*igienica|biscotti|crackers|cereali)\b/i
+    const shoppingL0Patterns = [
+      // "lista spesa" / "lista della spesa"
+      /\blista\s+(?:della\s+)?spesa\b/i,
+      // "fare la spesa" / "andare a fare spesa" / "andiamo a fare la spesa"
+      /\b(?:fare|andiamo\s+a\s+fare|vai\s+a\s+fare|va\s*['']\s*a\s+fare)\s+(?:la\s+)?spesa\b/i,
+      // "al supermercato / alla Coop / al Lidl" — SOLO se è il focus della frase (non "passo al supermercato" in contesto multi)
+      /^(?:andiamo|vai|andate|domani(?:\s+mattina)?)\s+(?:al\s+supermercato|alla\s+coop|al\s+lidl|all['']\s*esselunga|al\s+conad|al\s+carrefour)\b/i,
+      // "un etto di / tre etti di / mezzo chilo di" — quantità tipiche spesa
+      /\b(?:un\s+etto|due\s+etti|tre\s+etti|mezzo\s+chilo|un\s+chilo|due\s+chili|un\s+litro|due\s+litri|una\s+confezione|un\s+pacco|una\s+bottiglia|due\s+bottiglie|una\s+scatola)\s+(?:di\s+)/i,
+    ]
+    // Guard: no amount, no logistic, no meal context
+    const isMealContext = /\b(?:a\s+pranzo|a\s+cena|per\s+cena|per\s+pranzo|si\s+mangia|mangiamo|cuciniamo|prepariamo|menu)\b/i.test(lower)
+    const hasLogisticContext = logistics?.subject && logistics?.actionVerb
+    const isShoppingL0 = !hasLogisticContext && amount === null && !isMealContext && shoppingL0Patterns.some(re => re.test(lower))
+    // Grocery-only list: 2+ grocery items AND no other strong context
+    const groceryMatches = lower.match(new RegExp(GROCERY_RE.source, 'gi'))
+    const groceryCount = groceryMatches ? groceryMatches.length : 0
+    const isPureGroceryList = groceryCount >= 2 && amount === null && !isMealContext && !hasLogisticContext
+    if (isShoppingL0 || isPureGroceryList) {
+      const action = buildAction('shopping', sentence, {
+        amount: null, date, time: null, persons, members, logistics, timeCtx,
+        category: null, currentMember,
+      })
+      actions.push(action)
+      totalConfidence += 0.85
+
+      if (debug) {
+        addSentenceTrace(debugTrace, {
+          sentence, intent: 'shopping', confidence: 0.85, source: 'l0_pattern',
           people: persons.map(p => p.name), date, time, amount: null,
           location: sentLocation, activity: sentActivity,
           actionsGenerated: [action], warnings: sentenceWarnings,

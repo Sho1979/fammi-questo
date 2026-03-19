@@ -10,7 +10,6 @@
  */
 
 import { db } from '../localDb.js'
-import { isDebugEnabled } from './debugLogger.js'
 
 // ═══════════════════════════════════════════════════════════════
 // SCORING
@@ -335,8 +334,8 @@ export async function resolveEditAction(familyId, editAction, members) {
 
   console.log('[Resolver]', status, resolverLog)
 
-  // Persist to nlpLogs if debug enabled
-  if (isDebugEnabled() && familyId) {
+  // ALWAYS persist resolver metrics (not gated by debug flag)
+  if (familyId) {
     try {
       await db.nlpLogs.add({
         id: crypto.randomUUID(),
