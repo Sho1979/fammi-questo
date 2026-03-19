@@ -23,12 +23,13 @@ import useAuthStore from '../store/authStore.js'
 import { isSpeechAvailable, recordSpeech } from '../lib/voice.js'
 import { notifyCluster } from './useNotifications.js'
 import { brainParse, learnFromConfirmed, learnFromRejected, applyDecay } from '../lib/brain/index.js'
+import { resolveEditAction } from '../lib/brain/dbResolver.js'
 import { initNlp, retrain, isNlpReady } from '../lib/brainNlp.js'
 import { expireOldDrafts } from '../lib/brain/conversationMemory.js'
 import { addExpense } from './useExpenses.js'
-import { addEvent } from './useCalendar.js'
-import { addTask } from './useTasks.js'
-import { addShoppingItem } from './useShopping.js'
+import { addEvent, deleteEvent, updateEvent } from './useCalendar.js'
+import { addTask, deleteTask, updateTask } from './useTasks.js'
+import { addShoppingItem, deleteShoppingItem } from './useShopping.js'
 import { scheduleShoppingReminders, scheduleDailyTaskReminders } from '../lib/notificationScheduler.js'
 import { notifyAll, notify } from './useNotifications.js'
 import { addMealPlan } from './useMeals.js'
@@ -225,6 +226,23 @@ export default function useBrain() {
       }
 
       const parsed = await brainParse(text, context)
+
+      // ─── RESOLVER STEP: resolve edit_action against DB ───
+      if (parsed.ok && parsed.actions?.length > 0) {
+        for (let i = 0; i < parsed.actions.length; i++) {
+          if (parsed.actions[i].type === 'edit_action') {
+            try {
+              parsed.actions[i] = await resolveEditAction(
+                familyId,
+                parsed.actions[i],
+                context.members
+              )
+            } catch (err) {
+              console.warn('[Brain] Resolver failed for edit_action:', err)
+            }
+          }
+        }
+      }
 
       if (parsed.usedAI) {
         incrementAICallCount().then(count => { aiCallCountRef.current = count })
@@ -602,6 +620,47 @@ export default function useBrain() {
           confirmedAt: null,
         })
         return { msg: `Promemoria per ${action.assignedToName || '?'}: ${action.title}`, record }
+      }
+
+      case 'edit_action': {
+        const target = action.resolved?.selectedRecord || action.resolved?.matchedRecord
+        if (!target) {
+          return { msg: `${action.verb}: nessun record selezionato`, record: null }
+        }
+
+        const verb = action.verb
+        const domain = action.resolved?.resolverTrace?.searchDomains?.[0] || 'events'
+
+        if (verb === 'delete') {
+          if (domain === 'events' || target.time_start !== undefined) {
+            await deleteEvent(target.id)
+            return { msg: `Eliminato evento "${target.title}"`, record: target }
+          } else if (domain === 'tasks' || target.status !== undefined) {
+            await deleteTask(target.id)
+            return { msg: `Eliminato task "${target.title}"`, record: target }
+          } else if (domain === 'shopping' || target.checked !== undefined) {
+            await deleteShoppingItem(target.id)
+            return { msg: `Rimosso "${target.name || target.title}" dalla lista`, record: target }
+          }
+        }
+
+        if (verb === 'move' || verb === 'edit') {
+          const patch = action.patch || {}
+          const changes = {}
+
+          if (domain === 'events' || target.time_start !== undefined) {
+            if (patch.dateNorm) changes.date = patch.dateNorm
+            if (patch.timeHint) changes.time_start = patch.timeHint
+            await updateEvent(target.id, changes)
+            return { msg: `Spostato "${target.title}" a ${patch.dateNorm || '?'}`, record: target }
+          } else if (domain === 'tasks' || target.status !== undefined) {
+            if (patch.dateNorm) changes.due_date = patch.dateNorm
+            await updateTask(target.id, changes)
+            return { msg: `Spostato task "${target.title}" a ${patch.dateNorm || '?'}`, record: target }
+          }
+        }
+
+        return { msg: `${verb}: operazione non supportata`, record: null }
       }
 
       default:
