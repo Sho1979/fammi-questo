@@ -150,6 +150,76 @@ export function isNegatedAction(sentence) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ACTIONABILITY FILTER
+// ═══════════════════════════════════════════════════════════════
+/**
+ * Check if a sentence is NON-actionable chatter that should be blocked.
+ * Inverted approach: block ONLY known chatter patterns, let everything else through.
+ * This prevents over-filtering legitimate Italian commands that lack explicit action verbs.
+ *
+ * "ciao come stai" → blocked (greeting)
+ * "ho fame" → blocked (state, not command)
+ * "Asia ha preso 8" → blocked (report, not command)
+ * "Martedì Viola ha il dentista" → allowed (calendar intent)
+ * "latte uova pane" → allowed (shopping list)
+ */
+const CHATTER_PATTERNS = [
+  // Greetings and social
+  /^(?:ciao|buongiorno|buonasera|salve|hey|ehi)\b/i,
+  /\b(?:come\s+stai|come\s+va|tutto\s+bene|bella\s+giornata)\b/i,
+  // Pure confirmations/reactions (no content)
+  /^(?:ok|va\s+bene|si|no|boh|forse|perfetto|grazie|dai|bella|bene|bravo|brava)\s*$/i,
+  /^(?:si\s+no\s+forse|hm\s+si\s+ok|si\s+ok\s+va\s+bene|ok\s+va\s+bene|perfetto\s+cos[iì]|va\s+bene\s+(?:dai|ok|grazie|così))\b/i,
+  // Opinions/states with no actionable content
+  /^(?:ho\s+fame|ho\s+sete|ho\s+sonno|sono\s+stanco|sono\s+stanca)\s*$/i,
+  // "X ha preso N" (grade report, not command) -- but NOT "X ha danza/dentista"
+  /\bha\s+preso\s+\d/i,
+  // Questions about cost/info with no action
+  /^quanto\s+cost[ai]/i,
+  // Compliments/descriptions that aren't commands
+  /\b(?:è\s+(?:un\s+)?bel\s|è\s+bell[oa]|è\s+brav[oa])\b/i,
+]
+
+// Single word that is clearly not a command (too ambiguous alone)
+const SINGLE_WORD_BLOCK = /^(?:ciao|ok|si|no|boh|forse|grazie|bene|bella|bravo|brava|niente|nulla)$/i
+
+export function isActionable(sentence) {
+  const lower = sentence.trim().toLowerCase()
+  const words = lower.split(/\s+/).filter(w => w.length > 0)
+
+  // Single word: block only known non-commands
+  if (words.length === 1) {
+    return !SINGLE_WORD_BLOCK.test(lower)
+  }
+
+  // Block known chatter patterns
+  if (CHATTER_PATTERNS.some(re => re.test(lower))) return false
+
+  // Everything else: let the parser decide
+  return true
+}
+
+// Past tense markers that indicate reporting, not commanding
+const PAST_TENSE_CHECK = /(?:ho|ha|abbiamo|hanno)\s+(?:portato|comprato|pagato|fatto|preso|messo|detto|visto|chiamato|mangiato|cucinato|lavato|pulito)/i
+const PAST_TENSE_STATE = /\b(?:era\s+(?:buon[oa]|bell[oa])|erano\s+|è\s+stat[oa]\s+(?:spostat|cancellat|bell|buon)|è\s+andat[oa]|sono\s+andat[ei]|siamo\s+andat[ei])\b/i
+
+// Exception: "ho speso/pagato X euro" is a valid expense
+const PAST_TENSE_EXPENSE = /(?:ho|ha|abbiamo)\s+(?:speso|pagato|preso)\s+\d/i
+// Exception: "ha fatto la spesa X euro" is valid
+const PAST_TENSE_EXPENSE2 = /(?:ha|ho)\s+(?:fatto\s+la\s+spesa|speso|pagato).*\d+\s*(?:euro|€)/i
+
+export function isPastTenseReport(sentence) {
+  const lower = sentence.trim().toLowerCase()
+  // Exceptions: expense/cost reports with amounts are valid actions
+  if (PAST_TENSE_EXPENSE.test(lower)) return false
+  if (PAST_TENSE_EXPENSE2.test(lower)) return false
+  // Check for past tense verbs or state descriptions
+  if (PAST_TENSE_CHECK.test(lower)) return true
+  if (PAST_TENSE_STATE.test(lower)) return true
+  return false
+}
+
+// ═══════════════════════════════════════════════════════════════
 // SENTENCE SPLITTER
 // ═══════════════════════════════════════════════════════════════
 /**

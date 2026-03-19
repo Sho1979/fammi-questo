@@ -21,7 +21,7 @@
 import { db } from '../localDb.js'
 import { classify, isNlpReady } from '../brainNlp.js'
 import { NLP_CONFIDENCE_HIGH, NLP_CONFIDENCE_LOW, SYNAPSE_CONFIDENCE_THRESHOLD, SHADOW_CONFIRM_THRESHOLD } from './config.js'
-import { stemIT, tokenizeForMatching, splitSentences, isNegatedAction } from './textUtils.js'
+import { stemIT, tokenizeForMatching, splitSentences, isNegatedAction, isActionable, isPastTenseReport } from './textUtils.js'
 import {
   parseLocalDate, parseLocalTime, parseTimeRange,
   parseAmount, extractPersons, extractLogistics,
@@ -188,6 +188,34 @@ export async function parseLocally(text, members = [], familyId = null, currentM
 
     // Oggetto per raccolta dati debug di questa frase
     const sentenceWarnings = []
+
+    // ─── ACTIONABILITY FILTER: skip frasi senza intent azionabile ───
+    // "ciao come stai" → skip. "Ho fame" → skip. "Asia ha preso 8" → skip.
+    // Regola: se non c'è verbo d'azione, importo, o entità strutturata → no azione.
+    if (!isActionable(sentence) && amount === null) {
+      if (debug) {
+        addSentenceTrace(debugTrace, {
+          sentence, intent: 'not_actionable', confidence: 0, source: 'actionability_filter',
+          people: persons.map(p => p.name), date, time, amount: null,
+          warnings: ['not_actionable_skipped'],
+        })
+      }
+      continue
+    }
+
+    // ─── PAST TENSE FILTER: skip frasi al passato che riportano, non comandano ───
+    // "Stamattina ho portato Viola" → skip. "La pizza era buona" → skip.
+    // Eccezione: "Ho speso 30 euro" → valid expense.
+    if (isPastTenseReport(sentence)) {
+      if (debug) {
+        addSentenceTrace(debugTrace, {
+          sentence, intent: 'past_tense', confidence: 0, source: 'past_tense_filter',
+          people: persons.map(p => p.name), date, time, amount: null,
+          warnings: ['past_tense_report_skipped'],
+        })
+      }
+      continue
+    }
 
     // ─── NEGATION CHECK: skip frasi negate ("non comprare X", "niente spesa") ───
     // Eccezione: "ricordami di NON X" → la negazione è il contenuto del reminder, non l'intent
@@ -783,6 +811,16 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       }
     } else {
       if (debug) sentenceWarnings.push('nlp_not_ready')
+    }
+
+    // ─── CONFIDENCE CAP: NLP.js overconfidence on very short/empty input ───
+    // NLP.js gives 1.0 on "ciao come stai" or "si no forse". Only cap on
+    // very short sentences (≤3 words) with no structured content.
+    // Longer sentences with person+date+activity are legitimate even without verbs.
+    const wordCount = lower.split(/\s+/).length
+    if (nlpScore > 0.8 && wordCount <= 3 && amount === null && !time && persons.length === 0) {
+      nlpScore = Math.min(nlpScore, 0.45)
+      if (debug) sentenceWarnings.push('nlp_confidence_capped_short')
     }
 
     // ─── L2: Sinapsi pesate ───
