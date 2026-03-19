@@ -14,7 +14,7 @@ import {
   CalendarDays, ListChecks, Wallet, UtensilsCrossed,
   ShoppingCart, StickyNote, AlertTriangle, Bell, Link2Off,
   Brain, Mic, Loader2, Sparkles, Wifi, WifiOff,
-  CheckCircle2, XCircle, AlertCircle,
+  CheckCircle2, XCircle, AlertCircle, Search, ArrowRight,
 } from 'lucide-react'
 
 // ─── Configurazione icone per tipo azione ─────────────────────
@@ -25,7 +25,150 @@ const ACTION_CONFIG = {
   meal:     { icon: UtensilsCrossed, label: 'Pasto',    color: '#22C55E', bg: 'rgba(34,197,94,0.08)' },
   shopping: { icon: ShoppingCart,    label: 'Lista',    color: '#EC4899', bg: 'rgba(236,72,153,0.08)' },
   reminder: { icon: Bell,            label: 'Promemoria', color: '#F97316', bg: 'rgba(249,115,22,0.08)' },
-  note:     { icon: StickyNote,      label: 'Nota',     color: '#94A3B8', bg: 'rgba(148,163,184,0.08)' },
+  note:        { icon: StickyNote,      label: 'Nota',     color: '#94A3B8', bg: 'rgba(148,163,184,0.08)' },
+  edit_action: { icon: CalendarDays,    label: 'Modifica', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)' },
+}
+
+// ─── EditActionCard — disambiguation UI per edit_action ──────
+function EditActionCard({ action, index, onSelectCandidate, onRemove }) {
+  const config = ACTION_CONFIG.edit_action
+  const resolved = action.resolved || {}
+  const status = resolved.status || 'not_found'
+  const verb = action.verb || 'edit'
+
+  const verbLabel = verb === 'delete' ? 'Elimina' : verb === 'move' ? 'Sposta' : 'Modifica'
+  const notFoundSuffix = verb === 'delete' ? 'da eliminare' : verb === 'move' ? 'da spostare' : 'da modificare'
+
+  // ── not_found ──
+  if (status === 'not_found') {
+    return (
+      <div
+        className="rounded-xl overflow-hidden transition-all duration-200"
+        style={{ background: config.bg, border: `1px solid ${config.color}20` }}
+      >
+        <div className="flex items-center gap-2.5 px-3 py-2.5">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-gray-100">
+            <Search size={16} className="text-gray-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+              Non trovato
+            </span>
+            <p className="text-sm font-medium text-gray-500 truncate">
+              Nessun risultato {notFoundSuffix} per "{action.originalText || action.title || '?'}"
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onRemove(index)}
+            className="flex-shrink-0 rounded-lg p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── ambiguous ──
+  if (status === 'ambiguous') {
+    const candidates = resolved.candidates || []
+    return (
+      <div
+        className="rounded-xl overflow-hidden transition-all duration-200"
+        style={{ background: config.bg, border: `1px solid #F59E0B30` }}
+      >
+        <div className="flex items-center gap-2.5 px-3 py-2.5">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{ background: 'rgba(245,158,11,0.15)' }}>
+            <AlertCircle size={16} className="text-amber-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500">
+              {verbLabel}
+            </span>
+            <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {action.originalText || action.title || '?'} — quale intendi?
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onRemove(index)}
+            className="flex-shrink-0 rounded-lg p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+        <div className="px-3 pb-2.5 flex flex-col gap-1.5">
+          {candidates.map((c, ci) => (
+            <button
+              key={ci}
+              type="button"
+              onClick={() => onSelectCandidate(index, c)}
+              className="w-full text-left rounded-lg px-3 py-2 border transition-all
+                hover:border-purple-300 hover:bg-purple-50 active:scale-[0.98]"
+              style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-card)' }}
+            >
+              <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                {c.title || c.text || '—'}
+              </p>
+              {c.date && (
+                <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  {c.date}
+                </p>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // ── resolved ──
+  const record = resolved.selectedRecord || resolved.matchedRecord || {}
+  const isDelete = verb === 'delete'
+  const VerbIcon = isDelete ? Trash2 : ArrowRight
+  const verbColor = isDelete ? '#EF4444' : '#8B5CF6'
+  const verbBg = isDelete ? 'rgba(239,68,68,0.08)' : config.bg
+
+  return (
+    <div
+      className="rounded-xl overflow-hidden transition-all duration-200"
+      style={{ background: verbBg, border: `1px solid ${verbColor}20` }}
+    >
+      <div className="flex items-center gap-2.5 px-3 py-2.5">
+        <div
+          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+          style={{ background: `${verbColor}20` }}
+        >
+          <VerbIcon size={16} style={{ color: verbColor }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: verbColor }}>
+            {verbLabel}
+          </span>
+          <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+            {record.title || record.text || action.title || '—'}
+          </p>
+          {record.date && (
+            <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+              {record.date}
+              {verb === 'move' && action.newDate && (
+                <span> <ArrowRight size={10} className="inline" /> {action.newDate}</span>
+              )}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => onRemove(index)}
+          className="flex-shrink-0 rounded-lg p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all"
+        >
+          <Trash2 size={13} />
+        </button>
+      </div>
+    </div>
+  )
 }
 
 // ─── ActionCard — legge SOLO campi canonici (Sprint 2+) ──────
@@ -191,6 +334,21 @@ export default function BrainSheet({
     setActions(prev => prev.filter((_, i) => i !== index))
   }, [])
 
+  const handleSelectCandidate = useCallback((actionIndex, candidate) => {
+    setActions(prev => prev.map((a, i) => {
+      if (i !== actionIndex || a.type !== 'edit_action') return a
+      return {
+        ...a,
+        resolved: {
+          ...a.resolved,
+          status: 'resolved',
+          selectedRecord: candidate,
+          resolutionSource: 'user_selected',
+        },
+      }
+    }))
+  }, [])
+
   const handleConfirm = () => {
     if (actions.length > 0) {
       confirmActions(actions)
@@ -304,12 +462,22 @@ export default function BrainSheet({
             {/* Action cards */}
             <div className="flex flex-col gap-2">
               {actions.map((action, i) => (
-                <ActionCard
-                  key={`${action.type}-${i}`}
-                  action={action}
-                  index={i}
-                  onRemove={handleRemove}
-                />
+                action.type === 'edit_action' ? (
+                  <EditActionCard
+                    key={`edit-${i}`}
+                    action={action}
+                    index={i}
+                    onSelectCandidate={handleSelectCandidate}
+                    onRemove={handleRemove}
+                  />
+                ) : (
+                  <ActionCard
+                    key={`${action.type}-${i}`}
+                    action={action}
+                    index={i}
+                    onRemove={handleRemove}
+                  />
+                )
               ))}
             </div>
 
