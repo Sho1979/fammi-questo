@@ -32,6 +32,8 @@ export const SENSITIVE_FIELDS = {
   rewards: ['points', 'reason', 'description'],
   recurrences: ['title', 'description', 'type', 'pattern', 'source_type', 'source_id'],
   notifications: ['title', 'body', 'type', 'data'],
+  messageContexts: ['raw_text', 'normalized_text'],
+  entityRelations: ['metadata_json'],
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -162,9 +164,12 @@ export async function decryptRecord(record, tableName, syncKey) {
       try {
         decrypted[field] = await decryptField(decrypted[encField], syncKey)
       } catch (err) {
-        console.error(`[SyncCrypto] Failed to decrypt ${tableName}.${field}:`, err)
-        // Keep the placeholder — don't crash the whole sync
-        decrypted[field] = null
+        // Hard fail: wrong key would silently nullify ALL data.
+        // Better to abort sync than destroy the local database.
+        throw new Error(
+          `[SyncCrypto] Decriptazione fallita per ${tableName}.${field} (record ${record.id}). ` +
+          `Chiave di sync errata o dati corrotti. Sync interrotto per proteggere i dati locali.`
+        )
       }
       delete decrypted[encField]
     }

@@ -4,6 +4,8 @@
  * Redesigned Inventario: visual location shelves, product cards, expiry badges.
  */
 import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db } from '../lib/localDb.js'
 import useAuthStore from '../store/authStore.js'
 
 // Shopping hooks
@@ -33,7 +35,9 @@ import {
 import { captureReceipt, extractProductsFromReceipt } from '../lib/receiptOcr.js'
 
 // Shared
-import { Modal, Toast } from '../components/shared/index.js'
+import { Modal, ConfirmDialog } from '../components/shared/index.js'
+import { showSuccess, showError, showUndo } from '../lib/toast.js'
+import { updateRecord } from '../lib/crud.js'
 import EmptyState from '../components/shared/EmptyState.jsx'
 import {
   ShoppingCart, Package, Plus, X, CheckCheck, PackageCheck,
@@ -64,13 +68,35 @@ function readPersistedCollapse() {
 export default function DispensaPage() {
   const { familyId } = useAuthStore()
   const [activeTab, setActiveTab] = useState(readPersistedTab)
-  const [toast, setToast] = useState(null)
+
+  const members = useLiveQuery(
+    () => familyId
+      ? db.members.where('family_id').equals(familyId).and((m) => !m._deleted).toArray()
+      : [],
+    [familyId],
+    []
+  )
 
   // Persist active tab
   const handleTabChange = useCallback((tabId) => {
     setActiveTab(tabId)
     try { localStorage.setItem(DISPENSA_TAB_KEY, tabId) } catch { /* noop */ }
   }, [])
+
+  // Loading skeleton
+  if (familyId && members.length === 0) {
+    return (
+      <div className="flex flex-col gap-3.5 px-4 py-4 pb-24" style={{ background: 'var(--bg-main)' }}>
+        <div className="animate-pulse space-y-3">
+          <div className="h-10 bg-gray-200 rounded-xl" />
+          <div className="h-20 bg-gray-200 rounded-2xl" />
+          <div className="h-14 bg-gray-200 rounded-2xl" />
+          <div className="h-14 bg-gray-200 rounded-2xl" />
+          <div className="h-14 bg-gray-200 rounded-2xl" />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-0 pb-24" style={{ background: 'var(--bg-main)' }}>
@@ -100,13 +126,12 @@ export default function DispensaPage() {
       {/* Content */}
       <div className="px-4 py-4 flex flex-col gap-3.5">
         {activeTab === 'spesa' ? (
-          <ShoppingTab familyId={familyId} toast={toast} setToast={setToast} />
+          <ShoppingTab familyId={familyId} />
         ) : (
-          <InventoryTab familyId={familyId} toast={toast} setToast={setToast} />
+          <InventoryTab familyId={familyId} />
         )}
       </div>
 
-      {toast && <Toast message={toast.message} onClose={() => setToast(null)} />}
     </div>
   )
 }
@@ -120,7 +145,7 @@ const SORT_OPTIONS = [
   { id: 'recent', label: 'Più recenti' },
 ]
 
-function ShoppingTab({ familyId, setToast }) {
+function ShoppingTab({ familyId }) {
   const items = useShoppingList(familyId)
   const { total, checked } = useShoppingCount(familyId)
 
@@ -129,6 +154,7 @@ function ShoppingTab({ familyId, setToast }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('default')
   const [showSort, setShowSort] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(null)
 
   // Filter items by search query
   const filteredItems = useMemo(() => {
@@ -160,8 +186,8 @@ function ShoppingTab({ familyId, setToast }) {
     const parsed = parseQuickAdd(quickText)
     await addShoppingItem({ ...parsed, category: quickCategory })
     setQuickText('')
-    setToast({ message: `${parsed.name} aggiunto alla lista` })
-  }, [quickText, quickCategory, setToast])
+    showSuccess(`${parsed.name} aggiunto alla lista`)
+  }, [quickText, quickCategory])
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') handleQuickAdd()
@@ -169,14 +195,14 @@ function ShoppingTab({ familyId, setToast }) {
 
   const handleClearChecked = async () => {
     const count = await clearCheckedItems(familyId)
-    if (count > 0) setToast({ message: `${count} articoli rimossi` })
+    if (count > 0) showSuccess(`${count} articoli rimossi`)
   }
 
   const handleMoveToInventory = async () => {
     const checkedItems = items.filter((i) => i.checked)
     if (checkedItems.length === 0) return
     const result = await moveShoppingToInventory(checkedItems)
-    setToast({ message: `${result.moved + result.merged} spostati in inventario` })
+    showSuccess(`${result.moved + result.merged} spostati in inventario`)
   }
 
   // Group by category (use sortedItems for filtered+sorted result)
@@ -320,7 +346,7 @@ function ShoppingTab({ familyId, setToast }) {
                         </span>
                       )}
                     </div>
-                    <button type="button" onClick={() => deleteShoppingItem(item.id)}
+                    <button type="button" onClick={() => setConfirmDelete({ id: item.id, type: 'shopping', name: item.name })}
                       className="p-1 text-gray-300 hover:text-red-500 transition-colors">
                       <X size={14} />
                     </button>
@@ -337,6 +363,26 @@ function ShoppingTab({ familyId, setToast }) {
           description="Aggiungi qualcosa dalla barra sopra o usa la voce"
         />
       )}
+
+      {/* Confirm delete dialog */}
+      <ConfirmDialog
+        isOpen={confirmDelete !== null}
+        title="Elimina articolo"
+        message={confirmDelete ? `Vuoi eliminare "${confirmDelete.name}" dalla lista?` : ''}
+        confirmLabel="Elimina"
+        danger
+        onConfirm={async () => {
+          if (confirmDelete) {
+            const deletedId = confirmDelete.id
+            await deleteShoppingItem(deletedId)
+            showUndo('Articolo eliminato', async () => {
+              await updateRecord('shoppingItems', deletedId, { _deleted: false })
+            })
+          }
+          setConfirmDelete(null)
+        }}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </>
   )
 }
@@ -352,7 +398,7 @@ const LOCATION_STYLES = {
   altro:    { gradient: 'linear-gradient(135deg, #F5F3FF, #EDE9FE)', accent: '#6D28D9', iconBg: '#DDD6FE' },
 }
 
-function InventoryTab({ familyId, setToast }) {
+function InventoryTab({ familyId }) {
   const items = useInventory(familyId)
   const expiring = useExpiringItems(familyId, 3)
 
@@ -363,6 +409,7 @@ function InventoryTab({ familyId, setToast }) {
   const [location, setLocation] = useState('dispensa')
   const [expiryDate, setExpiryDate] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(null)
 
   // OCR state
   const [scanning, setScanning] = useState(false)
@@ -404,8 +451,8 @@ function InventoryTab({ familyId, setToast }) {
       expiry_date: expiryDate || null,
     })
     setName(''); setQuantity('1'); setExpiryDate(''); setShowAdd(false)
-    setToast({ message: `${name.trim()} aggiunto` })
-  }, [name, quantity, unit, location, expiryDate, setToast])
+    showSuccess(`${name.trim()} aggiunto`)
+  }, [name, quantity, unit, location, expiryDate])
 
   // OCR
   const handleScanReceipt = useCallback(async () => {
@@ -414,16 +461,16 @@ function InventoryTab({ familyId, setToast }) {
       const imageData = await captureReceipt()
       const products = await extractProductsFromReceipt(imageData)
       if (products.length === 0) {
-        setToast({ message: 'Nessun prodotto trovato nello scontrino' })
+        showSuccess('Nessun prodotto trovato nello scontrino')
       } else {
         setOcrProducts(products.map((p) => ({ ...p, selected: true })))
       }
     } catch (err) {
-      if (err.message !== 'Annullato') setToast({ message: `Errore: ${err.message}` })
+      if (err.message !== 'Annullato') showError(`Errore: ${err.message}`)
     } finally {
       setScanning(false)
     }
-  }, [setToast])
+  }, [])
 
   const handleOcrConfirm = useCallback(async () => {
     if (!ocrProducts) return
@@ -432,8 +479,8 @@ function InventoryTab({ familyId, setToast }) {
     const result = await addReceiptToInventory(selected)
     setOcrProducts(null)
     setOcrSaving(false)
-    setToast({ message: `${result.added} aggiunti, ${result.merged} aggiornati` })
-  }, [ocrProducts, setToast])
+    showSuccess(`${result.added} aggiunti, ${result.merged} aggiornati`)
+  }, [ocrProducts])
 
   const toggleOcrProduct = (idx) => {
     setOcrProducts((prev) => prev.map((p, i) => i === idx ? { ...p, selected: !p.selected } : p))
@@ -592,7 +639,7 @@ function InventoryTab({ familyId, setToast }) {
                               </span>
                             )}
                           </div>
-                          <button type="button" onClick={() => deleteInventoryItem(item.id)}
+                          <button type="button" onClick={() => setConfirmDelete({ id: item.id, type: 'inventory', name: item.name })}
                             className="p-1.5 rounded-lg text-gray-300 hover:bg-red-50 hover:text-red-500 transition-all">
                             <Trash2 size={14} />
                           </button>
@@ -660,6 +707,26 @@ function InventoryTab({ familyId, setToast }) {
           </button>
         </div>
       </Modal>
+
+      {/* Confirm delete dialog */}
+      <ConfirmDialog
+        isOpen={confirmDelete !== null}
+        title="Elimina prodotto"
+        message={confirmDelete ? `Vuoi eliminare "${confirmDelete.name}" dall'inventario?` : ''}
+        confirmLabel="Elimina"
+        danger
+        onConfirm={async () => {
+          if (confirmDelete) {
+            const deletedId = confirmDelete.id
+            await deleteInventoryItem(deletedId)
+            showUndo('Prodotto eliminato', async () => {
+              await updateRecord('inventory', deletedId, { _deleted: false })
+            })
+          }
+          setConfirmDelete(null)
+        }}
+        onCancel={() => setConfirmDelete(null)}
+      />
 
       {/* OCR Results Review Modal */}
       <Modal isOpen={ocrProducts !== null} onClose={() => setOcrProducts(null)} title="Prodotti dallo scontrino">

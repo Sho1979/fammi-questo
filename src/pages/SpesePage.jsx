@@ -20,7 +20,9 @@ import ExpenseList from '../components/expenses/ExpenseList.jsx'
 import ExpenseForm from '../components/expenses/ExpenseForm.jsx'
 import BudgetOverview from '../components/budget/BudgetOverview.jsx'
 import BudgetSetup from '../components/budget/BudgetSetup.jsx'
-import { Modal, Toast, ConfirmDialog, EmptyState } from '../components/shared/index.js'
+import { Modal, ConfirmDialog, EmptyState } from '../components/shared/index.js'
+import { showSuccess, showUndo } from '../lib/toast.js'
+import { notifyEvents } from '../hooks/useNotifications.js'
 import {
   Wallet, BarChart3, PiggyBank, ChevronLeft, ChevronRight,
 } from 'lucide-react'
@@ -61,7 +63,6 @@ export default function SpesePage() {
 
   const [tab, setTab] = useState('lista')
   const [currentMonth, setCurrentMonth] = useState(getCurrentMonth)
-  const [toast, setToast] = useState(null)
 
   const expenses = useExpensesByMonth(familyId, currentMonth)
   const monthlyTotals = useMonthlyTotals(familyId, 6)
@@ -78,15 +79,18 @@ export default function SpesePage() {
   const [editingExpense, setEditingExpense] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
 
-  const showToast = (msg, action, onAction) => setToast({ message: msg, action, onAction })
-
   const handleSave = useCallback(async (data) => {
     if (editingExpense) {
       await updateExpense(editingExpense.id, data)
-      showToast('Spesa aggiornata')
+      showSuccess('Spesa aggiornata')
     } else {
       await addExpense(data)
-      showToast('Spesa aggiunta')
+      showSuccess('Spesa aggiunta')
+      // Notify parents
+      notifyEvents.expenseAdded(
+        currentMember?.name, currentMember?.icon,
+        data.amount || 0, data.note || data.category || ''
+      ).catch(() => {})
     }
     setShowForm(false)
     setEditingExpense(null)
@@ -100,11 +104,24 @@ export default function SpesePage() {
     const id = confirmDelete
     setConfirmDelete(null)
     await deleteExpense(id)
-    showToast('Spesa eliminata', 'Annulla', async () => {
+    showUndo('Spesa eliminata', async () => {
       await undoDelete(id)
-      showToast('Spesa ripristinata')
     })
   }, [confirmDelete])
+
+  // Loading skeleton
+  if (familyId && !currentMember) {
+    return (
+      <div className="flex flex-col gap-3.5 px-4 py-4 pb-24" style={{ background: 'var(--bg-main)' }}>
+        <div className="animate-pulse space-y-3">
+          <div className="h-10 bg-gray-200 rounded-xl" />
+          <div className="h-20 bg-gray-200 rounded-2xl" />
+          <div className="h-14 bg-gray-200 rounded-2xl" />
+          <div className="h-14 bg-gray-200 rounded-2xl" />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-0 pb-24" style={{ background: 'var(--bg-main)' }}>
@@ -183,8 +200,6 @@ export default function SpesePage() {
         onCancel={() => setConfirmDelete(null)} title="Elimina spesa"
         message="Vuoi eliminare questa spesa?" confirmLabel="Elimina" danger />
 
-      {toast && <Toast message={toast.message} action={toast.action}
-        onAction={toast.onAction} onClose={() => setToast(null)} />}
     </div>
   )
 }

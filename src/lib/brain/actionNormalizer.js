@@ -98,6 +98,7 @@ function normalizeAction(raw, ctx, index) {
     case 'shopping': return normalizeShopping(raw, ctx, index)
     case 'reminder': return normalizeReminder(raw, ctx, index)
     case 'note':     return normalizeNote(raw, ctx, index)
+    case 'edit_request': return normalizeNote({ ...raw, type: 'note', text: raw.hint || raw.title || '' }, ctx, index)
     default:
       // Tipo sconosciuto → converti in note
       console.warn(`[ActionNormalizer] Tipo sconosciuto "${type}", converto in note`)

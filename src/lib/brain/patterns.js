@@ -74,9 +74,26 @@ function buildBootstrapSynapses() {
   const dishes = ['pasta', 'pizza', 'risotto', 'insalata', 'frittata', 'pollo', 'pesce', 'carne', 'lasagna', 'gnocchi', 'polpette', 'arrosto', 'carbonara', 'sushi', 'grigliata']
   for (const d of dishes) add(d, 'meal', null, 0.3)
 
-  // Shopping
-  const shopWords = ['compra', 'comprare', 'prendi', 'prendere', 'servono', 'serve', 'manca', 'mancano', 'finito', 'finiti', 'finita', 'lista', 'da comprare']
-  for (const w of shopWords) add(w, 'shopping')
+  // Shopping — NOTA: "prendere/prendi" e "serve/manca" hanno peso BASSO
+  // perché sono ambigui (prendere = anche andare a prendere qualcuno)
+  const shopStrong = ['compra', 'comprare', 'lista', 'da comprare', 'spesa']
+  for (const w of shopStrong) add(w, 'shopping', null, 0.5)
+  const shopMedium = ['servono', 'mancano', 'finito', 'finiti', 'finita']
+  for (const w of shopMedium) add(w, 'shopping', null, 0.3)
+  // "prendi/prendere", "serve", "manca" sono troppo ambigui — peso molto basso
+  const shopWeak = ['prendi', 'prendere', 'serve', 'manca']
+  for (const w of shopWeak) add(w, 'shopping', null, 0.15)
+
+  // Absence — assenze scuola/attività (STRONG: marker strutturale chiaro)
+  const absenceWords = ['assente', 'assenza', 'malata', 'malato', 'febbre', 'influenza', 'raffreddata', 'raffreddato']
+  for (const w of absenceWords) add(w, 'absence', null, 0.7)
+  // Negazioni che implicano assenza (peso medio, servono contesto)
+  const absenceNeg = ['niente', 'niente scuola', 'non va', 'resta a casa', 'sta male', 'sta poco bene']
+  for (const w of absenceNeg) add(w, 'absence', null, 0.5)
+
+  // Reminder — promemoria espliciti (distinguere da task)
+  const reminderWords = ['ricordami', 'ricordati', 'ricordaci', 'ricordare', 'promemoria', 'non dimenticare', 'non scordarti', 'avvisami', 'avvisare', 'memo']
+  for (const w of reminderWords) add(w, 'reminder', null, 0.6)
 
   return synapses
 }

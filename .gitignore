@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-new
+dist-ios
 dist-ssr
 .env
 .env.local

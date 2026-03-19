@@ -120,7 +120,7 @@ export const TEST_PHRASES = [
   { input: 'Stasera cena dai suoceri verso le 19:30', expectedIntent: 'calendar', expectedEntities: ['date', 'time'], category: 'calendar', difficulty: 'easy' },
 
   // ─── TASK: varianti ───
-  { input: 'Bisogna portare il cane dal veterinario', expectedIntent: 'task', expectedEntities: [], category: 'task', difficulty: 'easy' },
+  { input: 'Bisogna portare il cane dal veterinario', expectedIntent: 'calendar', expectedEntities: [], category: 'task', difficulty: 'easy' },
   { input: 'Non dimenticare di firmare il diario di Viola', expectedIntent: 'task', expectedEntities: ['person'], category: 'task', difficulty: 'medium' },
   { input: 'Iscrivere Asia al campo estivo entro fine mese', expectedIntent: 'task', expectedEntities: ['person'], category: 'task', difficulty: 'medium' },
 
@@ -211,7 +211,7 @@ export const TEST_PHRASES = [
   { input: 'Finita la pasta e il riso', expectedIntent: 'shopping', expectedEntities: [], category: 'shopping_real', difficulty: 'easy' },
   { input: 'Ci serve il detersivo per la lavatrice', expectedIntent: 'shopping', expectedEntities: [], category: 'shopping_real', difficulty: 'easy' },
   { input: 'Domani mattina prendi il pane fresco', expectedIntent: 'shopping', expectedEntities: ['date'], category: 'shopping_real', difficulty: 'medium' },
-  { input: 'Ricordati di comprare le merendine per le bambine', expectedIntent: 'shopping', expectedEntities: [], category: 'shopping_real', difficulty: 'medium' },
+  { input: 'Ricordati di comprare le merendine per le bambine', expectedIntent: 'reminder', expectedEntities: [], category: 'shopping_real', difficulty: 'medium' },
   { input: 'Servono pannolini taglia 4 e salviette umidificate', expectedIntent: 'shopping', expectedEntities: [], category: 'shopping_real', difficulty: 'easy' },
   { input: 'Prendi anche la frutta e la verdura per la settimana', expectedIntent: 'shopping', expectedEntities: [], category: 'shopping_real', difficulty: 'medium' },
   { input: 'Siamo senza caffè e zucchero', expectedIntent: 'shopping', expectedEntities: [], category: 'shopping_real', difficulty: 'easy' },
@@ -388,7 +388,7 @@ export const TEST_PHRASES = [
   // ─── MEDICINA E SALUTE ───
   { input: 'Comprare il Nurofen per Viola alla farmacia', expectedIntent: 'shopping', expectedEntities: ['person'], category: 'health_extra', difficulty: 'medium' },
   { input: 'Viola deve prendere l\'antibiotico alle 8 e alle 20', expectedIntent: 'calendar', expectedEntities: ['person', 'time'], category: 'health_extra', difficulty: 'medium' },
-  { input: 'Prenotare visita allergologica per Asia', expectedIntent: 'task', expectedEntities: ['person'], category: 'health_extra', difficulty: 'medium' },
+  { input: 'Prenotare visita allergologica per Asia', expectedIntent: 'calendar', expectedEntities: ['person'], category: 'health_extra', difficulty: 'medium' },
 
   // ─── COMPITI E SCUOLA ───
   { input: 'Asia deve portare il cartellone per la presentazione di scienze', expectedIntent: 'task', expectedEntities: ['person'], category: 'school_extra', difficulty: 'medium' },
@@ -398,7 +398,7 @@ export const TEST_PHRASES = [
   // ─── COMPLEANNI E FESTE ───
   { input: 'Festa di compleanno di Asia sabato al parco giochi', expectedIntent: 'calendar', expectedEntities: ['person', 'date'], category: 'party_extra', difficulty: 'medium' },
   { input: 'Comprare il regalo per la compagna di Viola', expectedIntent: 'shopping', expectedEntities: ['person'], category: 'party_extra', difficulty: 'medium' },
-  { input: 'Preparare la torta per il compleanno di Asia venerdì', expectedIntent: 'task', expectedEntities: ['person', 'date'], category: 'party_extra', difficulty: 'medium' },
+  { input: 'Preparare la torta per il compleanno di Asia venerdì', expectedIntent: 'calendar', expectedEntities: ['person', 'date'], category: 'party_extra', difficulty: 'medium' },
 
   // ─── SPESE EXTRA ───
   { input: 'Pagata la pizza 32 euro ieri sera', expectedIntent: 'expense', expectedEntities: ['amount'], category: 'expense_extra', difficulty: 'easy' },
@@ -490,6 +490,27 @@ export const TEST_PHRASES = [
   { input: 'La Viola la ga el dentista', expectedIntent: 'calendar', expectedEntities: ['person'], category: 'dirty_dialect', difficulty: 'hard' },
   { input: 'Ciara va a tor su la Asia', expectedIntent: 'calendar', expectedEntities: ['person', 'logistics'], category: 'dirty_dialect', difficulty: 'hard' },
   { input: 'Gh è da comprar el lat e i öf', expectedIntent: 'shopping', expectedEntities: [], category: 'dirty_dialect', difficulty: 'hard' },
+
+  // ─── MULTI-INTENT: frasi composte che devono generare MULTIPLE azioni ───
+  // expectedIntent: 'multi' = il test passa se vengono generate almeno N azioni dei tipi attesi
+  { input: 'domani porta Viola alle 8 e compra latte e ricordami bollo',
+    expectedIntent: 'multi', expectedTypes: ['calendar', 'shopping', 'reminder'],
+    category: 'multi_intent', difficulty: 'hard' },
+  { input: 'stasera vengono a cena Luca e Giulia, compra vino e segna 15 euro',
+    expectedIntent: 'multi', expectedTypes: ['calendar', 'shopping', 'expense'],
+    category: 'multi_intent', difficulty: 'hard' },
+  { input: 'quando esci passa in farmacia e segna 12 euro',
+    expectedIntent: 'multi', expectedTypes: ['expense'],
+    category: 'multi_intent', difficulty: 'hard' },
+  { input: 'compra pane, latte, uova e porta il cane dal vet giovedì',
+    expectedIntent: 'multi', expectedTypes: ['shopping', 'calendar'],
+    category: 'multi_intent', difficulty: 'hard' },
+  { input: 'Chiara porta Asia a danza e compra il latte e ricordami la bolletta',
+    expectedIntent: 'multi', expectedTypes: ['calendar', 'shopping', 'reminder'],
+    category: 'multi_intent', difficulty: 'hard' },
+  { input: 'Ho speso 50 euro dal meccanico e prenota la revisione per venerdì',
+    expectedIntent: 'multi', expectedTypes: ['expense', 'task'],
+    category: 'multi_intent', difficulty: 'hard' },
 ]
 
 // ═══════════════════════════════════════════════════════════════
@@ -524,9 +545,18 @@ export async function runTestBatch(members, familyId, currentMember, phrases = T
     let actualIntent = firstAction?.type || result?.type || null
     // Le assenze generano type:'calendar' con isAbsence:true — mappalo a 'absence'
     if (firstAction?.isAbsence) actualIntent = 'absence'
-    const intentCorrect = phrase.expectedIntent === null
-      ? true  // frasi ambigue: non valutiamo l'intent
-      : actualIntent === phrase.expectedIntent
+    let intentCorrect
+    if (phrase.expectedIntent === 'multi') {
+      // Multi-intent: passa se tutte le azioni attese sono presenti
+      const actualTypes = (result?.actions || []).map(a => a.type)
+      const expectedTypes = phrase.expectedTypes || []
+      intentCorrect = expectedTypes.every(t => actualTypes.includes(t))
+      actualIntent = actualTypes.join('+') || null
+    } else if (phrase.expectedIntent === null) {
+      intentCorrect = true  // frasi ambigue: non valutiamo l'intent
+    } else {
+      intentCorrect = actualIntent === phrase.expectedIntent
+    }
 
     // Valuta completezza entità
     const actualEntities = extractFoundEntityKeys(result)

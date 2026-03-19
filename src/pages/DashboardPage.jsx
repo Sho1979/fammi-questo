@@ -28,6 +28,7 @@ import {
   Utensils, ArrowRight, Sparkles, AlertTriangle, Bell, Clock
 } from 'lucide-react'
 import BrainInput from '../components/brain/BrainInput.jsx'
+import ActivityFeed from '../components/shared/ActivityFeed.jsx'
 import { useBrainContext } from '../components/layout/AppShell.jsx'
 import { Skeleton } from '../components/shared/index.js'
 
@@ -521,6 +522,15 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+      {/* ═══ 8. Activity Feed — ultime azioni famiglia ═══ */}
+      <div className="rounded-2xl p-4" style={{ background: 'var(--bg-card)' }}>
+        <div className="flex items-center gap-2 mb-3">
+          <Clock size={16} style={{ color: 'var(--text-muted)' }} />
+          <h2 className="text-sm font-bold" style={{ color: 'var(--text-secondary)' }}>Attivita' recente</h2>
+        </div>
+        <ActivityFeed familyId={familyId} members={members} limit={5} />
+      </div>
+
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0; }

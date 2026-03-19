@@ -160,6 +160,35 @@ export default function BrainDebugPage() {
     refreshAnalytics()
   }
 
+  // ─── Stress Test ───
+  const [stressRunning, setStressRunning] = useState(false)
+  const [stressProgress, setStressProgress] = useState('')
+  const [stressReport, setStressReport] = useState(null)
+
+  const handleStressTest = async () => {
+    if (stressRunning) return
+    setStressRunning(true)
+    setStressReport(null)
+    setStressProgress('Caricamento...')
+    try {
+      const { runStressTest } = await import('../lib/brain/stressTest.js')
+      const members_list = await (await import('../lib/localDb.js')).db.members
+        .where('family_id').equals(familyId).and(m => !m._deleted).toArray()
+
+      const report = await runStressTest(members_list, familyId, currentMember, {
+        onProgress: (i, total, phrase) => {
+          setStressProgress(`${i}/${total} — ${phrase?.slice(0, 40) || ''}...`)
+        },
+      })
+      setStressReport(report)
+      setStressProgress('')
+    } catch (err) {
+      setStressProgress(`ERRORE: ${err.message}`)
+    } finally {
+      setStressRunning(false)
+    }
+  }
+
   return (
     <div className="max-w-2xl mx-auto p-4 pb-24 space-y-4">
       {/* Header */}
@@ -177,6 +206,78 @@ export default function BrainDebugPage() {
           {debugOn ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
           {debugOn ? 'Debug ON' : 'Debug OFF'}
         </button>
+      </div>
+
+      {/* ─── Stress Test Panel ─── */}
+      <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-violet-800">Stress Test NLP</h2>
+          <button
+            onClick={handleStressTest}
+            disabled={stressRunning}
+            className={`px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors ${
+              stressRunning
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-violet-600 hover:bg-violet-700 active:bg-violet-800'
+            }`}
+          >
+            {stressRunning ? 'In corso...' : 'Lancia Stress Test'}
+          </button>
+        </div>
+        {stressProgress && (
+          <div className="text-xs text-violet-600 font-mono bg-violet-100 rounded p-2">
+            {stressProgress}
+          </div>
+        )}
+        {stressReport && (
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="bg-white rounded-lg p-2">
+                <div className="text-2xl font-bold text-violet-700">{stressReport.stats.accuracy}%</div>
+                <div className="text-xs text-gray-500">Accuracy</div>
+              </div>
+              <div className="bg-white rounded-lg p-2">
+                <div className="text-2xl font-bold text-green-600">{stressReport.stats.correctIntent}</div>
+                <div className="text-xs text-gray-500">Corretti</div>
+              </div>
+              <div className="bg-white rounded-lg p-2">
+                <div className="text-2xl font-bold text-red-500">{stressReport.stats.wrongIntent + stressReport.stats.errors}</div>
+                <div className="text-xs text-gray-500">Errori</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-center text-xs">
+              <div className="bg-white rounded p-2">
+                <span className="font-bold">{stressReport.stats.avgTimeMs}ms</span> media/frase
+              </div>
+              <div className="bg-white rounded p-2">
+                <span className="font-bold">{stressReport.stats.needsAI}</span> necessitano AI
+              </div>
+            </div>
+            <details className="text-xs">
+              <summary className="cursor-pointer text-violet-700 font-medium">Report completo</summary>
+              <pre className="mt-2 bg-gray-900 text-green-400 rounded-lg p-3 overflow-x-auto text-xs whitespace-pre-wrap max-h-96 overflow-y-auto">
+                {stressReport.summary}
+              </pre>
+            </details>
+            {stressReport.failures.length > 0 && (
+              <details className="text-xs">
+                <summary className="cursor-pointer text-red-600 font-medium">
+                  Fallimenti ({stressReport.failures.length})
+                </summary>
+                <div className="mt-2 space-y-1 max-h-64 overflow-y-auto">
+                  {stressReport.failures.map((f, i) => (
+                    <div key={i} className="bg-red-50 border border-red-200 rounded p-2">
+                      <div className="font-mono text-red-800">"{f.input}"</div>
+                      <div className="text-red-600">
+                        Atteso: <b>{f.expectedIntent}</b> | Trovato: <b>{f.detectedIntent}</b> (conf: {f.confidence})
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
+        )}
       </div>
 
       {!debugOn && (

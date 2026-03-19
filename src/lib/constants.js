@@ -140,14 +140,33 @@ export const ROLE_ALIASES = {
   ragazzo: ROLES.CHILD,
 }
 
+/**
+ * Normalize role names to English canonical form.
+ * The codebase historically mixed Italian and English role names.
+ * This function ensures consistency.
+ */
+const ROLE_NORMALIZE_MAP = {
+  'genitore': 'parent',
+  'papà': 'parent', 'papa': 'parent', 'mamma': 'parent',
+  'figlio': 'child', 'figlia': 'child',
+  'nonno': 'elder', 'nonna': 'elder',
+}
+
+export function normalizeRole(role) {
+  if (!role) return 'child'
+  const lower = role.toLowerCase().trim()
+  return ROLE_NORMALIZE_MAP[lower] || lower
+}
+
 /** Check if a role is a parent/elder (full access) */
 export function isParentRole(role) {
-  return role === ROLES.PARENT || role === ROLES.ELDER || role === 'genitore'
+  const normalized = normalizeRole(role)
+  return normalized === 'parent' || normalized === 'elder'
 }
 
 /** Check if a role is a child */
 export function isChildRole(role) {
-  return role === ROLES.CHILD || role === 'figlio' || role === 'ragazzo'
+  return normalizeRole(role) === 'child'
 }
 
 // ─── AI / Voice constants ─────────────────────────────────────

@@ -3,6 +3,9 @@
  * member filter chips, proposals section, and animated interactions.
  */
 import { useState, useCallback, useMemo } from 'react'
+import confetti from 'canvas-confetti'
+import { showSuccess, showUndo } from '../lib/toast.js'
+import { notifyEvents } from '../hooks/useNotifications.js'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../lib/localDb.js'
 import useAuthStore from '../store/authStore.js'
@@ -24,7 +27,7 @@ import TaskBoard from '../components/tasks/TaskBoard.jsx'
 import TaskForm from '../components/tasks/TaskForm.jsx'
 import ProposalList from '../components/tasks/ProposalList.jsx'
 import TemplateManager from '../components/tasks/TemplateManager.jsx'
-import { Modal, Toast, ConfirmDialog } from '../components/shared/index.js'
+import { Modal, ConfirmDialog } from '../components/shared/index.js'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Trophy, Crown, Star, Sparkles, RotateCw, Filter } from 'lucide-react'
 
@@ -52,7 +55,6 @@ export default function TasksPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingTask, setEditingTask] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
-  const [toast, setToast] = useState(null)
   const [isProposal, setIsProposal] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
 
@@ -91,20 +93,24 @@ export default function TasksPage() {
 
   const hasActiveFilters = priorityFilter !== 'all' || sortMode !== 'default'
 
-  const showToast = (message, action, onAction) => {
-    setToast({ message, action, onAction })
-  }
-
   const handleToggle = useCallback(async (id) => {
     const task = tasks.find((t) => t.id === id)
     if (!task) return
     if (task.status === 'done') {
       if (!isParent) return
       await reopenTask(id)
-      showToast('Task riaperto')
+      showSuccess('Task riaperto')
     } else {
       await completeTask(id, currentMember?.id)
-      showToast('Task completato! 🎉')
+      showSuccess('Task completato!')
+      // Confetti burst from center-bottom
+      confetti({
+        particleCount: 80,
+        spread: 60,
+        origin: { y: 0.7 },
+        colors: ['#8B5CF6', '#22C55E', '#F59E0B', '#3B82F6'],
+        disableForReducedMotion: true,
+      })
     }
   }, [tasks, currentMember, isParent])
 
@@ -115,17 +121,24 @@ export default function TasksPage() {
   const handleSave = useCallback(async (data) => {
     if (editingTask) {
       await updateTask(editingTask.id, data)
-      showToast('Task aggiornato')
+      showSuccess('Task aggiornato')
     } else if (isProposal) {
       await proposeTask(data)
-      showToast('Proposta inviata! In attesa di approvazione.')
+      showSuccess('Proposta inviata! In attesa di approvazione.')
     } else {
       await addTask(data)
-      showToast('Task aggiunto')
+      showSuccess('Task aggiunto')
+      // Notify assignee
+      if (data.assigned_to && data.assigned_to !== currentMember?.id) {
+        notifyEvents.taskAssigned(
+          currentMember?.name, currentMember?.icon, '',
+          data.assigned_to, data.title, data.due_date || ''
+        ).catch(() => {})
+      }
     }
     setShowForm(false)
     setEditingTask(null)
-  }, [editingTask, isProposal])
+  }, [editingTask, isProposal, currentMember])
 
   const handleAccept = useCallback(async (taskId) => {
     const task = tasks.find(t => t.id === taskId)
@@ -136,17 +149,17 @@ export default function TasksPage() {
         status: 'done',
         confirmedAt: new Date().toISOString(),
       })
-      showToast('Promemoria confermato ✓')
+      showSuccess('Promemoria confermato ✓')
     } else {
       await updateTask(taskId, { accepted: true, status: 'in_progress' })
-      showToast('Task accettato! ✅')
+      showSuccess('Task accettato! ✅')
     }
   }, [tasks])
 
   const handleReassign = useCallback(async (taskId, newMemberId) => {
     await updateTask(taskId, { assigned_to: newMemberId, accepted: false })
     const member = members.find((m) => m.id === newMemberId)
-    showToast(`Task riassegnato a ${member?.name || 'membro'}`)
+    showSuccess(`Task riassegnato a ${member?.name || 'membro'}`)
   }, [members])
 
   const handleDeleteRequest = (id) => setConfirmDelete(id)
@@ -154,15 +167,29 @@ export default function TasksPage() {
     const id = confirmDelete
     setConfirmDelete(null)
     await deleteTask(id)
-    showToast('Task eliminato', 'Annulla', async () => {
+    showUndo('Task eliminato', async () => {
       await undoDeleteTask(id)
-      showToast('Task ripristinato')
     })
   }, [confirmDelete])
 
   // Task count per member for filter chips
   const memberTaskCount = (mId) =>
     tasks.filter((t) => t.assigned_to === mId || t.assigned_to === 'tutti').length
+
+  // Loading state: show skeleton while members load
+  if (familyId && members.length === 0) {
+    return (
+      <div className="flex flex-col gap-3.5 px-4 py-4 pb-24" style={{ background: 'var(--bg-main)' }}>
+        <div className="animate-pulse space-y-3">
+          <div className="h-8 bg-gray-200 rounded-xl w-1/2" />
+          <div className="h-24 bg-gray-200 rounded-2xl" />
+          <div className="h-16 bg-gray-200 rounded-2xl" />
+          <div className="h-16 bg-gray-200 rounded-2xl" />
+          <div className="h-16 bg-gray-200 rounded-2xl" />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-3.5 px-4 py-4 pb-24 stagger-children" style={{ background: 'var(--bg-main)' }}>
@@ -423,8 +450,8 @@ export default function TasksPage() {
         <ProposalList
           proposals={proposals}
           members={members}
-          onApprove={async (id) => { await approveTask(id); showToast('Proposta approvata ✅') }}
-          onReject={async (id) => { await rejectTask(id); showToast('Proposta rifiutata') }}
+          onApprove={async (id) => { await approveTask(id); showSuccess('Proposta approvata ✅') }}
+          onReject={async (id) => { await rejectTask(id); showSuccess('Proposta rifiutata') }}
         />
       )}
 
@@ -478,14 +505,6 @@ export default function TasksPage() {
         danger
       />
 
-      {toast && (
-        <Toast
-          message={toast.message}
-          action={toast.action}
-          onAction={toast.onAction}
-          onClose={() => setToast(null)}
-        />
-      )}
     </div>
   )
 }

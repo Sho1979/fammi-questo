@@ -25,23 +25,21 @@ function getCurrentMemberId() {
 }
 
 /**
- * Tabelle che generano entry in syncLog quando scritte via createRecord/updateRecord.
- * SOLO tabelle effettivamente sincronizzate con Supabase (vedi sync.js TABLE_MAP).
+ * Tabelle sincronizzate con Supabase (vedi sync.js TABLE_MAP).
+ * Usato per validazione; syncLog writes sono state rimosse (dead code:
+ * sync.js non le leggeva, causando I/O inutile su ogni write).
  *
  * Escluse intenzionalmente:
- *   - patterns      → locale, scritta direttamente da learningEngine.js (bypassa crud.js)
- *   - priceHistory  → tabella fantasma, zero writer, candidata rimozione schema
- *   - brainNotes    → tabella fantasma, zero writer, candidata rimozione schema
+ *   - patterns      → locale, scritta direttamente da learningEngine.js
+ *   - priceHistory  → tabella fantasma, zero writer
+ *   - brainNotes    → tabella fantasma, zero writer
  *   - nlpDocuments, nlpLogs, conversationDrafts, syncLog, settings → locali by design
  */
 const ENTITY_TABLES = new Set([
   'family', 'members', 'expenses', 'budgets', 'events', 'tasks', 'taskTemplates',
   'meals', 'mealPlans', 'shoppingItems', 'inventory', 'rewards', 'notifications', 'recurrences',
+  'messageContexts', 'entityRelations',
 ])
-
-function shouldLogSync(table) {
-  return ENTITY_TABLES.has(table)
-}
 
 /**
  * @param {string} table - Dexie table name
@@ -61,14 +59,6 @@ export async function createRecord(table, data) {
     updated_by: data.updated_by || getCurrentMemberId(),
   }
   await db.table(table).add(record)
-  if (shouldLogSync(table)) {
-    await db.syncLog.add({
-      table_name: table,
-      record_id: record.id,
-      action: 'upsert',
-      synced: 0,
-    })
-  }
   return record
 }
 
@@ -79,25 +69,21 @@ export async function createRecord(table, data) {
  * @returns {Promise<Record<string, unknown>>} updated record
  */
 export async function updateRecord(table, id, changes) {
-  const existing = await db.table(table).get(id)
-  if (!existing) throw new Error(`Record ${id} not found in ${table}`)
-  const updated = {
-    ...existing,
-    ...changes,
-    updated_at: new Date().toISOString(),
-    _version: (existing._version || 0) + 1,
-    _device_id: getDeviceId(),
-    updated_by: changes.updated_by || getCurrentMemberId(),
-  }
-  await db.table(table).put(updated)
-  if (shouldLogSync(table)) {
-    await db.syncLog.add({
-      table_name: table,
-      record_id: id,
-      action: 'upsert',
-      synced: 0,
-    })
-  }
+  // Atomic read-modify-write in single Dexie transaction
+  let updated
+  await db.transaction('rw', db.table(table), async () => {
+    const existing = await db.table(table).get(id)
+    if (!existing) throw new Error(`Record ${id} not found in ${table}`)
+    updated = {
+      ...existing,
+      ...changes,
+      updated_at: new Date().toISOString(),
+      _version: (existing._version || 0) + 1,
+      _device_id: getDeviceId(),
+      updated_by: changes.updated_by || getCurrentMemberId(),
+    }
+    await db.table(table).put(updated)
+  })
   return updated
 }
 
@@ -108,7 +94,25 @@ export async function updateRecord(table, id, changes) {
  * @returns {Promise<Record<string, unknown>>} updated record with _deleted: true
  */
 export async function deleteRecord(table, id) {
-  return updateRecord(table, id, { _deleted: true })
+  const result = await updateRecord(table, id, { _deleted: true })
+
+  // Cleanup: mark entityRelations referencing this record as deleted
+  try {
+    const fromRels = await db.entityRelations
+      .filter(r => !r._deleted && r.from_entity_id === id)
+      .toArray()
+    const toRels = await db.entityRelations
+      .filter(r => !r._deleted && r.to_entity_id === id)
+      .toArray()
+    const allRels = [...fromRels, ...toRels]
+    for (const rel of allRels) {
+      await db.entityRelations.update(rel.id, { _deleted: true, updated_at: new Date().toISOString() })
+    }
+  } catch (err) {
+    console.warn('[CRUD] Zombie relation cleanup failed (non-blocking):', err)
+  }
+
+  return result
 }
 
 /**

@@ -21,6 +21,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../lib/localDb.js'
 import useAuthStore from '../store/authStore.js'
 import { isSpeechAvailable, recordSpeech } from '../lib/voice.js'
+import { notifyCluster } from './useNotifications.js'
 import { brainParse, learnFromConfirmed, learnFromRejected, applyDecay } from '../lib/brain/index.js'
 import { initNlp, retrain, isNlpReady } from '../lib/brainNlp.js'
 import { expireOldDrafts } from '../lib/brain/conversationMemory.js'
@@ -268,6 +269,8 @@ export default function useBrain() {
   //
   // ═══════════════════════════════════════════════════════════════
   const confirmActions = useCallback(async (confirmedActions) => {
+    // Guard: prevent double-submit (mobile double-tap)
+    if (phase !== 'preview') return
     setPhase('executing')
     const log = []
     const refToIdMap = new Map() // actionRef → realDbId
@@ -312,6 +315,10 @@ export default function useBrain() {
         console.log('[Brain] Executing dependent action:', action.type, action.title || action.text || '')
         const result = await executeAction(action)
         if (result) {
+          // Register dependent action in refToIdMap for entity graph relations
+          if (result.record?.id && action.meta?.actionRef) {
+            refToIdMap.set(action.meta.actionRef, result.record.id)
+          }
           const linked = !!action.linkedEntity?.realId
           log.push({ ok: true, msg: result.msg, type: action.type, linked })
           if (!linked && action.linkedEntity) {
@@ -329,7 +336,97 @@ export default function useBrain() {
 
     setExecutionLog(log)
 
-    // 5. APPRENDIMENTO
+    // 5. RELATIONAL LAYER: messageContext + entityRelations
+    // Crea il contesto messaggio e collega tutte le azioni con same_message
+    try {
+      const successfulActions = log.filter(l => l.ok)
+      if (successfulActions.length > 0 && familyId) {
+        const contextId = crypto.randomUUID()
+        const now = new Date().toISOString()
+        await db.messageContexts.add({
+          id: contextId,
+          family_id: familyId,
+          source_type: result?.usedAI ? 'voice' : 'text',
+          raw_text: originalTextRef.current || '',
+          normalized_text: (originalTextRef.current || '').toLowerCase().trim(),
+          created_by_member_id: currentMember?.id || null,
+          created_at: now,
+          updated_at: now,
+          parser_version: 'v2',
+          confidence_overall: result?.confidence || 0,
+          status: 'confirmed',
+          action_count: successfulActions.length,
+          _deleted: false,
+          _version: 1,
+          _device_id: localStorage.getItem('fm_device_id') || null,
+        })
+
+        // Link tutte le azioni al messageContext con caused_by_message
+        // e tra di loro con same_message
+        const entityIds = [...refToIdMap.entries()]
+        for (const [actionRef, entityId] of entityIds) {
+          const actionType = confirmedActions.find(a => a.meta?.actionRef === actionRef)?.type || 'unknown'
+          // caused_by_message: azione → messageContext
+          await db.entityRelations.add({
+            id: crypto.randomUUID(),
+            family_id: familyId,
+            from_entity_type: actionType,
+            from_entity_id: entityId,
+            relation_type: 'caused_by_message',
+            to_entity_type: 'message_context',
+            to_entity_id: contextId,
+            created_at: now,
+            updated_at: now,
+            created_by_system: true,
+            _deleted: false,
+            _version: 1,
+            _device_id: localStorage.getItem('fm_device_id') || null,
+          })
+        }
+
+        // same_message: link tra ogni coppia di azioni nate dallo stesso messaggio
+        const ids = [...refToIdMap.values()]
+        for (let i = 0; i < ids.length; i++) {
+          for (let j = i + 1; j < ids.length; j++) {
+            const typeI = confirmedActions.find(a => refToIdMap.get(a.meta?.actionRef) === ids[i])?.type || 'unknown'
+            const typeJ = confirmedActions.find(a => refToIdMap.get(a.meta?.actionRef) === ids[j])?.type || 'unknown'
+            await db.entityRelations.add({
+              id: crypto.randomUUID(),
+              family_id: familyId,
+              from_entity_type: typeI,
+              from_entity_id: ids[i],
+              relation_type: 'same_message',
+              to_entity_type: typeJ,
+              to_entity_id: ids[j],
+              created_at: now,
+              updated_at: now,
+              created_by_system: true,
+              _deleted: false,
+              _version: 1,
+              _device_id: localStorage.getItem('fm_device_id') || null,
+            })
+          }
+        }
+      }
+      // Clustered notification: one notification for all actions from this message
+      // Use refToIdMap to identify which actions were successfully persisted
+      // (avoids index mismatch between confirmedActions and log arrays)
+      if (successfulActions.length > 0) {
+        const persistedActions = confirmedActions.filter(a =>
+          a.meta?.actionRef && refToIdMap.has(a.meta.actionRef)
+        )
+        await notifyCluster(contextId, {
+          senderName: currentMember?.name || 'Qualcuno',
+          senderIcon: currentMember?.icon || null,
+          actions: persistedActions.length > 0 ? persistedActions : confirmedActions.slice(0, successfulActions.length),
+          excludeMemberId: currentMember?.id,
+        })
+      }
+    } catch (err) {
+      console.warn('[Brain] Relational layer failed (non-blocking):', err)
+    }
+
+    // 6. APPRENDIMENTO
     try {
       await learnFromConfirmed(confirmedActions, originalTextRef.current, familyId)
 
@@ -358,7 +455,7 @@ export default function useBrain() {
       setTranscript('')
       setExecutionLog([])
     }, 5000)
-  }, [familyId, currentMember])
+  }, [familyId, currentMember, phase])
 
   // ─── CANCEL ────────────────────────────────────────────────
   const cancel = useCallback(() => {
@@ -481,28 +578,7 @@ export default function useBrain() {
         if (record?.id) {
           try {
             scheduleShoppingReminders({ id: record.id, name: action.title, notifyScope: _scope })
-            // Se scope family: notifica in-app a tutti i membri
-            if (_scope === 'family') {
-              await notifyAll({
-                type: 'shopping_reminder',
-                title: 'Lista spesa',
-                message: 'Da comprare: ' + (action.title || 'Articolo'),
-                icon: '🛒',
-                data: { itemId: record.id },
-              })
-            } else {
-              // Scope personal: notifica solo a chi scrive
-              const _myId = currentMember?.id
-              if (_myId) {
-                await notify(_myId, {
-                  type: 'shopping_reminder',
-                  title: 'Promemoria spesa',
-                  message: 'Da comprare: ' + (action.title || 'Articolo'),
-                  icon: '🛒',
-                  data: { itemId: record.id },
-                })
-              }
-            }
+            // Individual notify calls removed — notifyCluster handles notification for all actions
           } catch (e) { /* ignore */ }
         }
         return { msg: `Lista: ${action.title}`, record }

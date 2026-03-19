@@ -159,8 +159,73 @@ export function parseTimeRange(text) {
 // ═══════════════════════════════════════════════════════════════
 // AMOUNT PARSING
 // ═══════════════════════════════════════════════════════════════
+// ─── Numeri italiani in lettere → cifra ───
+const NUMERI_IT = {
+  zero: 0, uno: 1, due: 2, tre: 3, quattro: 4, cinque: 5, sei: 6, sette: 7, otto: 8, nove: 9,
+  dieci: 10, undici: 11, dodici: 12, tredici: 13, quattordici: 14, quindici: 15, sedici: 16,
+  diciassette: 17, diciotto: 18, diciannove: 19, venti: 20, trenta: 30, quaranta: 40,
+  cinquanta: 50, sessanta: 60, settanta: 70, ottanta: 80, novanta: 90, cento: 100,
+  duecento: 200, trecento: 300, quattrocento: 400, cinquecento: 500, seicento: 600,
+  settecento: 700, ottocento: 800, novecento: 900, mille: 1000, duemila: 2000,
+}
+// Composti: "centocinquanta" → 150, "trecentoventi" → 320, "quarantacinque" → 45
+function parseNumeroItaliano(word) {
+  if (!word) return null
+  const w = word.toLowerCase().trim()
+  if (NUMERI_IT[w] !== undefined) return NUMERI_IT[w]
+
+  // Prova a scomporre il numero composto
+  let total = 0
+  let remaining = w
+
+  // Migliaia
+  for (const [nome, val] of Object.entries(NUMERI_IT).sort((a, b) => b[1] - a[1])) {
+    if (val >= 1000 && remaining.startsWith(nome)) {
+      total += val
+      remaining = remaining.slice(nome.length)
+      break
+    }
+  }
+
+  // Centinaia
+  for (const [nome, val] of Object.entries(NUMERI_IT).sort((a, b) => b[1] - a[1])) {
+    if (val >= 100 && val < 1000 && remaining.startsWith(nome)) {
+      total += val
+      remaining = remaining.slice(nome.length)
+      break
+    }
+  }
+  // "cento" da solo dentro una parola composta (es. "centocinquanta")
+  if (remaining.startsWith('cento')) {
+    total += 100
+    remaining = remaining.slice(5)
+  }
+
+  // Decine + unità
+  for (const [nome, val] of Object.entries(NUMERI_IT).sort((a, b) => b[1] - a[1])) {
+    if (val >= 10 && val < 100 && remaining.startsWith(nome)) {
+      total += val
+      remaining = remaining.slice(nome.length)
+      break
+    }
+  }
+  // Unità residue
+  for (const [nome, val] of Object.entries(NUMERI_IT).sort((a, b) => b[1] - a[1])) {
+    if (val >= 1 && val < 10 && remaining.startsWith(nome)) {
+      total += val
+      remaining = remaining.slice(nome.length)
+      break
+    }
+  }
+
+  // Se abbiamo parsato tutto o quasi, ritorna il totale
+  if (total > 0 && remaining.length <= 1) return total
+  return null
+}
+
 export function parseAmount(text) {
   const lower = text.toLowerCase()
+  // Numeri con cifre: "45 euro", "€ 100", "12,50 euro"
   const m = lower.match(/(\d+[.,]?\d*)\s*(?:euro|€)/) || lower.match(/(?:euro|€)\s*(\d+[.,]?\d*)/)
   if (m) return parseFloat(m[1].replace(',', '.'))
   const m2 = lower.match(/(?:spes[oaie]|pagat[oaie]|costat[oaie]|cost[oaie])\s+(\d+[.,]?\d*)/)
@@ -168,6 +233,20 @@ export function parseAmount(text) {
   // "3,90 per il giornale" — importo con contesto spesa senza verbo esplicito
   const m3 = lower.match(/(\d+[.,]\d{2})\s+(?:per|di|al|in)\b/)
   if (m3) return parseFloat(m3[1].replace(',', '.'))
+
+  // Numeri in lettere: "centocinquanta euro", "quarantacinque euro", "speso trentadue euro"
+  const mLetters = lower.match(/(?:spes[oaie]|pagat[oaie]|costat[oaie]|cost[oaie]|dare|pagare)?\s*([a-zàèéìòù]+)\s+euro/)
+  if (mLetters) {
+    const val = parseNumeroItaliano(mLetters[1])
+    if (val !== null && val > 0) return val
+  }
+  // "centocinquanta euro" senza verbo
+  const mLetters2 = lower.match(/([a-zàèéìòù]+)\s+(?:euro|€)/)
+  if (mLetters2) {
+    const val = parseNumeroItaliano(mLetters2[1])
+    if (val !== null && val > 0) return val
+  }
+
   return null
 }
 
@@ -248,7 +327,7 @@ export function extractLogistics(text, members) {
   // ── Pattern "X porta/accompagna Y" — X=driver, Y=soggetto ──
   // Member-aware: cerca nomi familiari noti prima del verbo per evitare
   // di catturare parole temporali (dopodomani, lunedì, ecc.) come driver
-  const LOGISTICS_VERBS_PORTA = /\s+(?:deve\s+)?(?:port(?:are|a)|accompagn(?:are|a))\s+([a-zA-Z\u00C0-\u00FF]+)/
+  const LOGISTICS_VERBS_PORTA = /\s+(?:deve\s+)?(?:port(?:are|a|ano)|accompagn(?:are|a|ano))\s+([a-zA-Z\u00C0-\u00FF]+)/
   for (const mem of members) {
     const allNames = [mem.name.toLowerCase(), ...(mem.aliases || []).map(a => a.toLowerCase())]
     for (const driverName of allNames) {
@@ -286,8 +365,8 @@ export function extractLogistics(text, members) {
   // Member-aware: cerca nomi familiari noti prima del verbo pickup
   if (!driver && !subject) {
     const PICKUP_VERB_PATTERNS = [
-      { re: /\s+(?:deve\s+)?(?:andare\s+a\s+|va\s+a\s+)prender[eao]\s+([a-zA-Z\u00C0-\u00FF]+)/, verb: 'prendere' },
-      { re: /\s+(?:deve\s+)prender[eao]\s+([a-zA-Z\u00C0-\u00FF]+)/, verb: 'prendere' },
+      { re: /\s+(?:deve\s+)?(?:andare\s+a\s+|va\s+a\s+)prend(?:er[eao]|e|ono)\s+([a-zA-Z\u00C0-\u00FF]+)/, verb: 'prendere' },
+      { re: /\s+(?:deve\s+)prend(?:er[eao]|e|ono)\s+([a-zA-Z\u00C0-\u00FF]+)/, verb: 'prendere' },
       { re: /\s+(?:deve\s+)?riprende(?:re)?\s+([a-zA-Z\u00C0-\u00FF]+)/, verb: 'riprendere' },
       { re: /\s+(?:deve\s+)?(?:andare\s+a\s+)?ritira(?:re)?\s+([a-zA-Z\u00C0-\u00FF]+)/, verb: 'ritirare' },
     ]
@@ -316,10 +395,10 @@ export function extractLogistics(text, members) {
   // ── Pattern collettivi con alias di gruppo: "prendere le bambine/i ragazzi" ──
   if (!driver && !subject) {
     const groupAliases = [
-      { re: /(?:prender[eao]|riprender[eao]|ritirare|portare)\s+(?:le\s+)?(?:bambine|ragazze|figlie|bimbe)\b/i, verb: 'prendere', filter: m => m.role === 'child' },
-      { re: /(?:prender[eao]|riprender[eao]|ritirare|portare)\s+(?:i\s+)?(?:bambini|ragazzi|figli|bimbi)\b/i, verb: 'prendere', filter: m => m.role === 'child' },
-      { re: /(?:accompagn(?:are|a))\s+(?:le\s+)?(?:bambine|ragazze|figlie|bimbe)\b/i, verb: 'portare', filter: m => m.role === 'child' },
-      { re: /(?:viene|va)\s+a\s+prender[eao]\s+(?:le\s+)?(?:bambine|ragazze|figlie|bimbe)\b/i, verb: 'prendere', filter: m => m.role === 'child' },
+      { re: /(?:prend(?:er[eao]|e|ono)|riprend(?:er[eao]|e|ono)|ritirare|port(?:are|a|ano))\s+(?:le\s+)?(?:bambine|ragazze|figlie|bimbe)\b/i, verb: 'prendere', filter: m => m.role === 'child' },
+      { re: /(?:prend(?:er[eao]|e|ono)|riprend(?:er[eao]|e|ono)|ritirare|port(?:are|a|ano))\s+(?:i\s+)?(?:bambini|ragazzi|figli|bimbi)\b/i, verb: 'prendere', filter: m => m.role === 'child' },
+      { re: /(?:accompagn(?:are|a|ano))\s+(?:le\s+)?(?:bambine|ragazze|figlie|bimbe)\b/i, verb: 'portare', filter: m => m.role === 'child' },
+      { re: /(?:viene|va)\s+a\s+prend(?:er[eao]|e|ono)\s+(?:le\s+)?(?:bambine|ragazze|figlie|bimbe)\b/i, verb: 'prendere', filter: m => m.role === 'child' },
     ]
     for (const { re: aliasRe, verb: aliasVerb } of groupAliases) {
       if (aliasRe.test(lower)) {
@@ -359,11 +438,11 @@ export function extractLogistics(text, members) {
   // Nessun driver esplicito, ma c'è un soggetto (la persona da prendere)
   if (!driver && !subject) {
     const collectivePickupPatterns = [
-      { re: new RegExp(`(?:dobbiamo|devo|devono|bisogna|occorre|tocca)\\s+(?:andare\\s+a\\s+|passare\\s+a\\s+)?prender[eao]\\s+(?:la\\s+|il\\s+|l[''']\\s*)?(${NAME})`), verb: 'prendere' },
-      { re: new RegExp(`(?:andiamo|vado|vanno)\\s+a\\s+prender[eao]\\s+(?:la\\s+|il\\s+|l[''']\\s*)?(${NAME})`), verb: 'prendere' },
-      { re: new RegExp(`(?:dobbiamo|devo|devono|bisogna)\\s+(?:andare\\s+a\\s+)?riprender[eao]\\s+(?:la\\s+|il\\s+|l[''']\\s*)?(${NAME})`), verb: 'riprendere' },
+      { re: new RegExp(`(?:dobbiamo|devo|devono|bisogna|occorre|tocca)\\s+(?:andare\\s+a\\s+|passare\\s+a\\s+)?prend(?:er[eao]|e|ono)\\s+(?:la\\s+|il\\s+|l[''']\\s*)?(${NAME})`), verb: 'prendere' },
+      { re: new RegExp(`(?:andiamo|vado|vanno)\\s+a\\s+prend(?:er[eao]|e|ono)\\s+(?:la\\s+|il\\s+|l[''']\\s*)?(${NAME})`), verb: 'prendere' },
+      { re: new RegExp(`(?:dobbiamo|devo|devono|bisogna)\\s+(?:andare\\s+a\\s+)?riprend(?:er[eao]|e|ono)\\s+(?:la\\s+|il\\s+|l[''']\\s*)?(${NAME})`), verb: 'riprendere' },
       { re: new RegExp(`(?:dobbiamo|devo|devono|bisogna|tocca)\\s+(?:andare\\s+a\\s+)?ritira(?:re)?\\s+(?:la\\s+|il\\s+|l[''']\\s*)?(${NAME})`), verb: 'ritirare' },
-      { re: new RegExp(`(?:dobbiamo|devo|devono|bisogna)\\s+(?:andare\\s+a\\s+)?port(?:are|a)\\s+(?:la\\s+|il\\s+|l[''']\\s*)?(${NAME})`), verb: 'portare' },
+      { re: new RegExp(`(?:dobbiamo|devo|devono|bisogna)\\s+(?:andare\\s+a\\s+)?port(?:are|a|ano)\\s+(?:la\\s+|il\\s+|l[''']\\s*)?(${NAME})`), verb: 'portare' },
     ]
     for (const { re, verb } of collectivePickupPatterns) {
       const m = lower.match(re)
@@ -412,6 +491,40 @@ export function extractLogistics(text, members) {
 
   console.log('[Brain] extractLogistics:', { driver: driver?.name, subject: subject?.name, accompaniedBy: accompaniedBy?.name, pickupBy: pickupBy?.name, actionVerb })
   return { accompaniedBy, pickupBy, subject, driver, actionVerb }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SHOPPING QUANTITY EXTRACTION
+// ═══════════════════════════════════════════════════════════════
+/**
+ * Extract quantity and unit from shopping item text.
+ * "3 litri di latte" -> { quantity: 3, unit: "litri", cleanName: "latte" }
+ * "500g di carne" -> { quantity: 500, unit: "g", cleanName: "carne" }
+ * "2 pizze" -> { quantity: 2, unit: "pz", cleanName: "pizze" }
+ * "latte" -> { quantity: 1, unit: "pz", cleanName: "latte" }
+ */
+export function extractShoppingQuantity(text) {
+  const clean = text.replace(/^(?:compra|comprare|prendi|prendere|acquista|acquistare)\s+/i, '').trim()
+
+  // Pattern: N unit di NAME (e.g., "3 litri di latte", "500g di carne")
+  const withUnit = clean.match(/^(\d+(?:[.,]\d+)?)\s*(kg|g|litri?|lt|ml|pezz[io]|conf(?:ezioni?)?|pacch(?:ett)?[io]|bottigli[ae]|scatol[ae]|buste?)\s+(?:di\s+)?(.+)/i)
+  if (withUnit) {
+    return { quantity: parseFloat(withUnit[1].replace(',', '.')), unit: withUnit[2].toLowerCase(), cleanName: withUnit[3].trim() }
+  }
+
+  // Pattern: Nunit (no space, e.g., "500g")
+  const noSpace = clean.match(/^(\d+(?:[.,]\d+)?)(kg|g|ml|lt)\s+(?:di\s+)?(.+)/i)
+  if (noSpace) {
+    return { quantity: parseFloat(noSpace[1].replace(',', '.')), unit: noSpace[2].toLowerCase(), cleanName: noSpace[3].trim() }
+  }
+
+  // Pattern: N NAME (e.g., "2 pizze", "3 mele")
+  const withNumber = clean.match(/^(\d+)\s+(.+)/i)
+  if (withNumber) {
+    return { quantity: parseInt(withNumber[1]), unit: 'pz', cleanName: withNumber[2].trim() }
+  }
+
+  return { quantity: 1, unit: 'pz', cleanName: clean }
 }
 
 // ═══════════════════════════════════════════════════════════════

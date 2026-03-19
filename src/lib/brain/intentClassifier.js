@@ -21,7 +21,7 @@
 import { db } from '../localDb.js'
 import { classify, isNlpReady } from '../brainNlp.js'
 import { NLP_CONFIDENCE_HIGH, NLP_CONFIDENCE_LOW, SYNAPSE_CONFIDENCE_THRESHOLD, SHADOW_CONFIRM_THRESHOLD } from './config.js'
-import { stemIT, tokenizeForMatching, splitSentences } from './textUtils.js'
+import { stemIT, tokenizeForMatching, splitSentences, isNegatedAction } from './textUtils.js'
 import {
   parseLocalDate, parseLocalTime, parseTimeRange,
   parseAmount, extractPersons, extractLogistics,
@@ -135,17 +135,23 @@ export async function parseLocally(text, members = [], familyId = null, currentM
 
   // Contesto condiviso tra frasi (coreference + spese)
   let lastContext = { location: null, subject: null, activity: null, driver: null, persons: [] }
+  let lastDate = null
 
   for (const sentence of sentences) {
     const lower = sentence.toLowerCase()
     const tokens = tokenizeForMatching(sentence)
     const stems = tokens.map(stemIT)
     let persons = extractPersons(sentence, members)
-    const date = parseLocalDate(sentence)
+    let date = parseLocalDate(sentence)
+    // Propagate date from previous segment if this segment has no explicit date
+    const todayStrEarly = new Date().toISOString().slice(0, 10)
+    if (date === todayStrEarly && lastDate && lastDate !== todayStrEarly) {
+      date = lastDate
+    }
     const time = parseLocalTime(sentence)
     const amount = parseAmount(sentence)
     const logistics = extractLogistics(sentence, members)
-    console.log('[Brain] extractLogistics RESULT:', JSON.stringify({ driver: logistics?.driver?.name, subject: logistics?.subject?.name, actionVerb: logistics?.actionVerb, accompaniedBy: logistics?.accompaniedBy?.name, pickupBy: logistics?.pickupBy?.name }))
+
 
     // ─── COREFERENCE: risolvi pronomi con contesto frase precedente ───
     // Pronomi italiani cliticizzati: "prendila", "portalo", "accompagnale"
@@ -183,11 +189,68 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     // Oggetto per raccolta dati debug di questa frase
     const sentenceWarnings = []
 
+    // ─── NEGATION CHECK: skip frasi negate ("non comprare X", "niente spesa") ───
+    // Eccezione: "ricordami di NON X" → la negazione è il contenuto del reminder, non l'intent
+    const isReminderWithNegation = /^(?:ricordami|avvisami|ricordaci)\b/i.test(lower.trim())
+    if (isNegatedAction(sentence) && !isReminderWithNegation) {
+      if (debug) {
+        addSentenceTrace(debugTrace, {
+          sentence, intent: 'negated', confidence: 0.95, source: 'negation_filter',
+          people: persons.map(p => p.name), date, time, amount: null,
+          warnings: ['negated_action_skipped'],
+        })
+      }
+      continue
+    }
+
+    // ─── L0-EDIT: Frasi di modifica/cancellazione → azione speciale "edit_request" ───
+    // Non parsing completo: genera un'azione di tipo "edit_request" con hint su cosa modificare.
+    // La UI mostrera' un messaggio guidato ("Vai in Calendario per modificare").
+    const editPatterns = [
+      { re: /^(?:cancella|elimina|rimuovi|togli)\s+/i, verb: 'delete' },
+      { re: /^(?:sposta|cambia|modifica|aggiorna|correggi)\s+/i, verb: 'edit' },
+      { re: /^(?:annulla|no,?\s*(?:aspetta|scusa)|(?:no,?\s+)?(?:erano|era|non)\s+\d)/i, verb: 'correct' },
+    ]
+    const editMatch = editPatterns.find(p => p.re.test(lower.trim()))
+    if (editMatch) {
+      // Detect which entity type is referenced
+      const targetType =
+        /\b(?:task|compito|attività)\b/i.test(lower) ? 'task' :
+        /\b(?:evento|appuntamento|dentista|danza|nuoto|scuola|calendario)\b/i.test(lower) ? 'calendar' :
+        /\b(?:spesa|euro|€|pagamento)\b/i.test(lower) ? 'expense' :
+        /\b(?:lista|shopping|comprare|spesa)\b/i.test(lower) ? 'shopping' :
+        'unknown'
+
+      const editAction = {
+        type: 'edit_request',
+        verb: editMatch.verb,
+        targetType,
+        title: sentence.trim(),
+        text: sentence.trim(),
+        date,
+        hint: editMatch.verb === 'delete'
+          ? `Per eliminare, vai nella sezione ${targetType === 'calendar' ? 'Calendario' : targetType === 'task' ? 'Task' : targetType === 'expense' ? 'Spese' : 'corrispondente'}`
+          : editMatch.verb === 'correct'
+          ? 'Per correggere, modifica direttamente dalla lista'
+          : `Per modificare, vai nella sezione corrispondente`,
+      }
+      actions.push(editAction)
+      totalConfidence += 0.80
+
+      if (debug) {
+        addSentenceTrace(debugTrace, {
+          sentence, intent: 'edit_request', confidence: 0.80, source: 'l0_edit',
+          people: persons.map(p => p.name), date, time,
+          actionsGenerated: [editAction], warnings: ['edit_not_executable'],
+        })
+      }
+      continue
+    }
+
     // ─── L0: Pattern strutturali diretti ───
 
     // Se c'è un importo chiaro → expense (90%)
     if (amount !== null && amount > 0) {
-      console.log('[Brain] Expense detected:', amount, '€ — lastContext:', JSON.stringify(lastContext))
       const action = buildAction('expense', sentence, {
         amount, date, time, persons, members, logistics, timeCtx,
         category: guessCategoryFromSynapses('expense', tokens, stems, allSynapses),
@@ -450,6 +513,19 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       // "grigliata con gli amici", "barbecue con i colleghi" → evento sociale
       /(?:grigliata|grigliatina|barbecue|bbq)\s+con\s+/i,
       /(?:cena|pranzo)\s+(?:al\s+ristorante|in\s+pizzeria|in\s+trattoria)/i,
+      // "vengono a cena/pranzo" → ospiti = evento
+      /(?:vengono|viene|arrivano|arriva)\s+a\s+(?:cena|pranzo)/i,
+      /a\s+(?:cena|pranzo)\s+(?:viene|vengono|arriva|arrivano)/i,
+      // "cena/pranzo + orario specifico" → è un evento
+      /(?:cena|pranzo)\s+alle?\s+\d/i,
+      // "pranzo dalla nonna", "cena alle X tutti insieme"
+      /(?:cena|pranzo)\s+.*(?:tutti|insieme|famiglia)/i,
+      // "pranzo di Natale/compleanno/comunione" → evento
+      /(?:cena|pranzo)\s+(?:di|del|della|per\s+il|per\s+la)\s+(?:natale|pasqua|compleanno|comunione|battesimo|matrimonio|anniversario|capodanno|festa)/i,
+      // "stasera/domani sera + cena con orario"
+      /(?:stasera|domani\s+sera|sabato\s+sera|venerdi\s+sera|domenica)\s+(?:cena|pranzo)\s+alle?\s*/i,
+      // "film in famiglia dopo cena"
+      /(?:film|cinema|serata)\s+(?:in\s+famiglia|con\s+|tutti)/i,
     ]
     const isSocialDiningL0 = socialDiningPatterns.some(re => re.test(lower))
     if (isSocialDiningL0) {
@@ -477,14 +553,23 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       continue
     }
 
-    // ─── L0b3: Pattern "facciamo/ordiniamo + piatto" o "grigliatina in giardino" → meal ───
+    // ─── L0b3: Pattern "facciamo/ordiniamo + piatto" o "a pranzo pasta" → meal ───
+    const PIATTI = 'pasta|pizza|risotto|lasagn[ea]|gnocchi|polpette|arrosto|grigliata|grigliatina|frittata|insalata|pollo|pesce|carne|sushi|carbonara|minestrone|minestra|zuppa|vellutata|parmigiana|tortellini|ravioli|tagliatelle|penne|spaghetti|hamburger|crepes|focaccia|piadina|riso|torta|pancake|cornetti|polenta|brodo|ragù|ragu|sugo|cotoletta'
     const mealDirectPatterns = [
-      /(?:facciamo|cuciniamo|prepariamo|ordiniamo)\s+(?:le?\s+|il\s+|la\s+|i\s+|gli\s+|un[oa]?\s+)?(?:pasta|pizza|risotto|lasagn[ea]|gnocchi|polpette|arrosto|grigliata|grigliatina|frittata|insalata|pollo|pesce|carne|sushi|carbonara|minestrone|minestra|zuppa|vellutata|parmigiana|tortellini|ravioli|tagliatelle|penne|spaghetti|hamburger|crepes|focaccia|piadina)/i,
+      new RegExp(`(?:facciamo|cuciniamo|prepariamo|ordiniamo)\\s+(?:le?\\s+|il\\s+|la\\s+|i\\s+|gli\\s+|un[oa]?\\s+)?(?:${PIATTI})`, 'i'),
       /(?:grigliat[ai]na?|barbecue|bbq)\s+(?:in\s+|al\s+|a\s+)/i,
       /(?:a\s+pranzo|a\s+cena)\s+(?:facciamo|prepariamo|cuciniamo)\s+/i,
       // "cucina Chiara che io lavoro" — assegnazione cucina a qualcuno
       /(?:sera|pranzo|cena|stasera)\s+cucin[aoei]\s+/i,
       /\bcucin[aoei]\s+\w+\s+(?:che|perché|così|quindi|tanto)\b/i,
+      // "a pranzo/cena + piatto" → è meal planning, non evento
+      new RegExp(`(?:a\\s+pranzo|a\\s+cena|per\\s+cena|per\\s+pranzo|per\\s+colazione|per\\s+merenda)\\s+(?:${PIATTI})`, 'i'),
+      // "domani sera pizza da asporto" — piatto con contesto temporale
+      new RegExp(`(?:stasera|domani\\s+sera|domani\\s+a\\s+pranzo|domani\\s+a\\s+cena)\\s+(?:${PIATTI})`, 'i'),
+      // "pizza da asporto/a domicilio" → meal
+      /(?:pizza|sushi|cinese|giapponese|kebab|poke)\s+(?:da\s+asporto|a\s+domicilio|delivery)/i,
+      // "colazione con + cibo"
+      new RegExp(`(?:colazione|merenda)\\s+con\\s+(?:i\\s+|le?\\s+|il\\s+)?(?:${PIATTI}|cornetti|pancake|biscotti|yogurt|cereali|latte|succo)`, 'i'),
     ]
     const isDirectMeal = mealDirectPatterns.some(re => re.test(lower))
     if (isDirectMeal) {
@@ -504,6 +589,64 @@ export async function parseLocally(text, members = [], familyId = null, currentM
         })
       }
       continue
+    }
+
+    // ─── L0b4: Pattern "portare/prenotare + visita/veterinario/appuntamento" → calendar ───
+    const appointmentPatterns = [
+      /(?:portare|porto)\s+(?:il\s+)?(?:cane|gatto)\s+(?:dal|al)\s+(?:veterinario|vet)/i,
+      /(?:portare|porto)\s+\w+\s+(?:dal|al|dalla|alla)\s+(?:dottore|dottoressa|pediatra|dentista|oculista|veterinario|meccanico)/i,
+      /(?:prenotar[ei]|prenota)\s+(?:visita|appuntamento|controllo)\s/i,
+      /(?:appuntamento|visita)\s+(?:dal|al|dalla|alla|con\s+il|con\s+la)\s+/i,
+      /(?:l\s+idraulico|il\s+tecnico|il\s+corriere|la\s+baby\s*sitter)\s+(?:viene|arriva|passa)/i,
+      /(?:viene|arriva|passa)\s+(?:l\s+idraulico|il\s+tecnico|il\s+corriere|la\s+baby\s*sitter)/i,
+      /(?:compleanno|scadenza|saggio|recita|torneo|partita|gara)\s+(?:di|del|della|il|lo|la)\s+/i,
+      /\bil\s+compleanno\s+di\b/i,
+    ]
+    const isAppointmentCalendar = appointmentPatterns.some(re => re.test(lower))
+    if (isAppointmentCalendar) {
+      const action = buildAction('calendar', sentence, {
+        amount: null, date, time, persons, members, logistics, timeCtx,
+        category: guessCategoryFromSynapses('calendar', tokens, stems, allSynapses),
+      })
+      actions.push(action)
+      totalConfidence += 0.82
+
+      if (debug) {
+        addSentenceTrace(debugTrace, {
+          sentence, intent: 'calendar', confidence: 0.82, source: 'l0_pattern',
+          people: persons.map(p => p.name), date, time,
+          actionsGenerated: [action], warnings: sentenceWarnings,
+        })
+      }
+      continue
+    }
+
+    // ─── L0b5: Pattern task esplicito — verbi azione domestica/compiti ───
+    const TASK_VERBS = /\b(?:pulire|pulizie|lavare|stirare|stendere|apparecchiare|sparecchiare|riordinare|ordinare|svuotare|aspirare|spazzare|innaffiare|scongelare|buttare|cambiare|controllare|firmare|stampare|chiamare|mandare|confermare|rinnovare)\b/i
+    const hasTaskVerb = TASK_VERBS.test(lower)
+    // Non è task se ha un contesto calendario forte (visita, appuntamento, veterinario)
+    const hasCalendarContext = /\b(?:visita|appuntamento|veterinario|dentista|dottore|pediatra|oculista)\b/i.test(lower)
+    // Non è task se ha un importo (→ expense)
+    if (hasTaskVerb && !hasCalendarContext && amount === null) {
+      // Verifica che non sia un meal (preparare la cena)
+      const isMealPrep = /\b(?:preparare|prepara)\s+(?:la\s+)?(?:cena|pranzo|colazione|merenda)\b/i.test(lower)
+      if (!isMealPrep) {
+        const action = buildAction('task', sentence, {
+          amount: null, date, time, persons, members, logistics, timeCtx,
+          category: null, currentMember,
+        })
+        actions.push(action)
+        totalConfidence += 0.80
+
+        if (debug) {
+          addSentenceTrace(debugTrace, {
+            sentence, intent: 'task', confidence: 0.80, source: 'l0_pattern',
+            people: persons.map(p => p.name), date, time,
+            actionsGenerated: [action], warnings: sentenceWarnings,
+          })
+        }
+        continue
+      }
     }
 
     // ─── L0c: Pattern "ricordami / avvisami" → reminder ───
@@ -527,8 +670,10 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       action.notifyScope = _notifyScope
 
       // --- DUAL ACTION: se il reminder contiene verbi di acquisto -> genera anche shopping ---
+      // MA NON se la frase contiene negazione ("ricordami di NON comprare X")
       const _buyingRe = /\b(?:comprare|compra|acquistare|acquista|prendere|prendi)\s+/i
-      if (_buyingRe.test(lower)) {
+      const _hasNegationBeforeBuy = /\bnon\s+(?:comprare|compra|acquistare|acquista|prendere|prendi)\b/i.test(lower)
+      if (_buyingRe.test(lower) && !_hasNegationBeforeBuy) {
         const shoppingAction = buildAction('shopping', sentence, {
           amount: null, date, time: null, persons, members, logistics, timeCtx,
           category: null, currentMember,
@@ -546,7 +691,7 @@ export async function parseLocally(text, members = [], familyId = null, currentM
 
         actions.push(shoppingAction)
         totalConfidence += 0.80
-        if (debug) console.log('[Brain] Dual action: reminder + shopping ->', shoppingAction.name, '(', shoppingAction.category, ')')
+
       }
 
       if (debug) {
@@ -802,13 +947,12 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     const sentenceActions = []
 
     // DUAL ACTION: "X deve prendere/portare Y" → calendario per Y + task per X
-    console.log('[Brain] Check dual action:', { finalType, hasDriver: !!logistics?.driver, hasSubject: !!logistics?.subject, driverName: logistics?.driver?.name, subjectName: logistics?.subject?.name, actionVerb: logistics?.actionVerb })
     let isDualAction = false
 
     if (finalType === 'calendar' && logistics?.driver && logistics?.subject
         && logistics.driver.id !== logistics.subject.id) {
       isDualAction = true
-      console.log('[Brain] ✅ DUAL ACTION attivata! Calendar per', logistics.subject.name, '+ Task per', logistics.driver.name, '(verb:', logistics.actionVerb, ')')
+
 
       const luogo = extractLocation(sentence, members)
       const activity = extractActivity(sentence)
@@ -905,7 +1049,6 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     } else if (finalType === 'calendar' && logistics?.subject && !logistics?.driver && logistics?.actionVerb) {
       // LOGISTICA COLLETTIVA: "dobbiamo andare a prendere Asia in stazione"
       // Subject c'è, driver non definito → evento calendar + task logistico senza driver
-      console.log('[Brain] Logistica collettiva:', logistics.subject.name, '—', logistics.actionVerb)
       const luogo = extractLocation(sentence, members)
       const activity = extractActivity(sentence)
       const isPickup = logistics.actionVerb === 'prendere' || logistics.actionVerb === 'riprendere' || logistics.actionVerb === 'ritirare'
@@ -981,6 +1124,8 @@ export async function parseLocally(text, members = [], familyId = null, currentM
         warnings: sentenceWarnings,
       })
     }
+
+    if (date !== todayStrEarly) lastDate = date
   }
 
   if (actions.length === 0) return null
@@ -1007,10 +1152,8 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     usedAI: false,
   }
 
-  console.log('[Brain] Pre-normalize actions:', JSON.stringify(actions.map(a => ({ type: a.type, title: a.title, time: a.time, category: a.category }))))
   const { actions: canonical, invalid, warnings: normWarnings } = normalizeAndValidateActions(actions, normContext)
 
-  console.log('[Brain] Post-normalize:', { canonical: canonical.length, invalid: invalid.length, invalidErrors: invalid.map(i => i.errors) })
   if (invalid.length > 0) {
     console.warn(`[Brain] ${invalid.length} azioni scartate dal validatore:`, invalid.map(i => i.errors))
   }

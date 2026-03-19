@@ -8,9 +8,7 @@
  * to extract products directly from the receipt image. This is actually MORE
  * accurate than Tesseract for Italian receipts.
  */
-import { AI_MODEL, AI_API_URL } from './constants.js'
-
-const ANTHROPIC_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY
+import { supabase, isSyncEnabled } from './supabase.js'
 
 /**
  * Capture photo from device camera.
@@ -53,8 +51,8 @@ export function captureReceipt() {
  * @returns {Promise<Array<{name: string, quantity: number, price: number|null, category: string}>>}
  */
 export async function extractProductsFromReceipt(imageDataUrl) {
-  if (!ANTHROPIC_KEY) {
-    throw new Error('API key Anthropic non configurata')
+  if (!isSyncEnabled()) {
+    throw new Error('OCR non disponibile: sync non configurato.')
   }
 
   // Extract base64 and media type
@@ -63,68 +61,17 @@ export async function extractProductsFromReceipt(imageDataUrl) {
   const mediaType = match[1]
   const base64Data = match[2]
 
-  const response = await fetch(AI_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
+  const { data, error } = await supabase.functions.invoke('receipt-ocr', {
+    body: {
+      image: base64Data,
+      media_type: mediaType,
     },
-    body: JSON.stringify({
-      model: AI_MODEL,
-      max_tokens: 2000,
-      messages: [{
-        role: 'user',
-        content: [
-          {
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: mediaType,
-              data: base64Data,
-            },
-          },
-          {
-            type: 'text',
-            text: `Sei un assistente che analizza scontrini italiani.
-Estrai TUTTI i prodotti da questo scontrino. Per ogni prodotto indica:
-- name: nome pulito del prodotto (senza codici, senza prezzi, in italiano naturale)
-- quantity: quantità (default 1)
-- price: prezzo unitario in euro (null se non leggibile)
-- category: una tra [frutta, verdura, carne, pesce, latticini, pane, pasta, condimenti, bevande, surgelati, igiene, casa, dolci, altro]
-
-Ignora: totali, subtotali, IVA, sconti, intestazioni, piè di pagina.
-
-Rispondi SOLO con un JSON array. Esempio:
-[{"name":"Latte intero","quantity":2,"price":1.49,"category":"latticini"},{"name":"Pane integrale","quantity":1,"price":2.30,"category":"pane"}]
-
-Se lo scontrino non è leggibile o non contiene prodotti, rispondi con [].`
-          }
-        ]
-      }]
-    })
   })
 
-  if (!response.ok) {
-    const err = await response.text()
-    throw new Error(`Errore API: ${response.status} — ${err}`)
-  }
+  if (error) throw new Error(`Errore OCR: ${error.message}`)
+  if (!data?.products) return []
 
-  const data = await response.json()
-  const text = data.content?.[0]?.text || '[]'
-
-  // Parse JSON from response (handle markdown code blocks)
-  const jsonMatch = text.match(/\[[\s\S]*\]/)
-  if (!jsonMatch) return []
-
-  try {
-    const products = JSON.parse(jsonMatch[0])
-    return products.filter((p) => p.name && typeof p.name === 'string')
-  } catch {
-    console.warn('OCR parse error:', text)
-    return []
-  }
+  return data.products.filter((p) => p.name && typeof p.name === 'string')
 }
 
 /**

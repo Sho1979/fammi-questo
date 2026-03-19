@@ -2,7 +2,7 @@
  * actionBuilder.js — Costruzione azioni dal tipo rilevato + title cleaning.
  */
 
-import { extractLocation, extractActivity } from './entityExtractor.js'
+import { extractLocation, extractActivity, extractShoppingQuantity } from './entityExtractor.js'
 import { levenshtein } from './textUtils.js'
 
 // ═══════════════════════════════════════════════════════════════
@@ -144,8 +144,10 @@ export function buildAction(type, sentence, ctx) {
         .replace(/\s{2,}/g, ' ')
         .trim()
       action.name = prodotto.length > 1 ? prodotto : sentence
-      action.quantity = 1
-      action.unit = 'pz'
+      const qty = extractShoppingQuantity(action.name)
+      action.quantity = qty.quantity
+      action.unit = qty.unit
+      if (qty.cleanName && qty.cleanName.length > 1) action.name = qty.cleanName
       if (mainPerson) action.person = mainPerson.name
       break
     }

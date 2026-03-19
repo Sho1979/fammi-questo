@@ -83,7 +83,7 @@ describe('crud', () => {
     expect(found._deleted).toBe(true)
   })
 
-  it('createRecord logs to syncLog for entity tables', async () => {
+  it('createRecord does not write to syncLog (removed: dead code)', async () => {
     const record = await createRecord('expenses', {
       family_id: 'f1',
       amount: 5,
@@ -92,8 +92,8 @@ describe('crud', () => {
       person_id: 'm1',
       date: '2026-03-06',
     })
+    // syncLog writes were removed — sync.js never read them (dead I/O)
     const logEntries = await db.syncLog.where('record_id').equals(record.id).toArray()
-    expect(logEntries.length).toBeGreaterThanOrEqual(1)
-    expect(logEntries.some(e => e.table_name === 'expenses' && e.action === 'upsert' && e.synced === 0)).toBe(true)
+    expect(logEntries.length).toBe(0)
   })
 })

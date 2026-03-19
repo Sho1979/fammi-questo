@@ -24,7 +24,9 @@ import DayView from '../components/calendar/DayView.jsx'
 import WeekView from '../components/calendar/WeekView.jsx'
 import ViewToggle from '../components/calendar/ViewToggle.jsx'
 import EventForm from '../components/calendar/EventForm.jsx'
-import { Modal, Toast, ConfirmDialog } from '../components/shared/index.js'
+import { Modal, ConfirmDialog } from '../components/shared/index.js'
+import { showSuccess, showUndo } from '../lib/toast.js'
+import { notifyEvents } from '../hooks/useNotifications.js'
 import Skeleton from '../components/shared/Skeleton.jsx'
 import { addTask, updateTask, completeTask } from '../hooks/useTasks.js'
 
@@ -55,9 +57,16 @@ export default function CalendarPage() {
       const [y, m] = dateParam.split('-').map(Number)
       setViewYear(y)
       setViewMonth(m - 1)
+      // Passa a vista giorno per mostrare l'evento direttamente
+      setViewMode('day')
       // Clean up the URL param
       searchParams.delete('date')
       setSearchParams(searchParams, { replace: true })
+      // Scroll in cima dopo il render
+      requestAnimationFrame(() => {
+        const main = document.querySelector('.scroll-container')
+        if (main) main.scrollTo({ top: 0, behavior: 'smooth' })
+      })
     }
   }, [searchParams, setSearchParams])
 
@@ -110,11 +119,6 @@ export default function CalendarPage() {
   const [editingEvent, setEditingEvent] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null) // eventId
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(null) // recurrence_id for "delete all"
-  const [toast, setToast] = useState(null)
-
-  const showToast = (message, action, onAction) => {
-    setToast({ message, action, onAction })
-  }
 
   // ─── Navigation (adapts to viewMode) ──────────────────
   const handlePrev = () => {
@@ -271,7 +275,7 @@ export default function CalendarPage() {
               assigned_to: log.member_id,
               due_date: eventData.date || editingEvent.date,
               status: 'todo',
-              priority: 'media',
+              priority: 'medium',
               category: 'altro',
               points: 5,
               accepted: log.member_id === currentMemberId,
@@ -286,16 +290,22 @@ export default function CalendarPage() {
         }
       }
 
-      showToast('Evento aggiornato')
+      showSuccess('Evento aggiornato')
     } else if (_recurrence) {
       await createRecurrence({
         ..._recurrence,
         event_template: eventData,
       })
-      showToast('Evento ricorrente creato')
+      showSuccess('Evento ricorrente creato')
     } else {
       await addEvent(eventData)
-      showToast('Evento aggiunto')
+      showSuccess('Evento aggiunto')
+      // Notify family
+      notifyEvents.eventCreated(
+        currentMember?.name, currentMember?.icon,
+        eventData.title, eventData.date,
+        eventData.person_id === 'tutti' ? 'Tutti' : members.find(m => m.id === eventData.person_id)?.name
+      ).catch(() => {})
     }
     setShowForm(false)
     setEditingEvent(null)
@@ -315,9 +325,8 @@ export default function CalendarPage() {
     const id = confirmDelete
     setConfirmDelete(null)
     await deleteEvent(id)
-    showToast('Evento eliminato', 'Annulla', async () => {
+    showUndo('Evento eliminato', async () => {
       await undoDeleteEvent(id)
-      showToast('Evento ripristinato')
     })
   }, [confirmDelete])
 
@@ -327,9 +336,8 @@ export default function CalendarPage() {
     setConfirmDeleteAll(null)
     if (!event) return
     await deleteEvent(event.id)
-    showToast('Occorrenza eliminata', 'Annulla', async () => {
+    showUndo('Occorrenza eliminata', async () => {
       await undoDeleteEvent(event.id)
-      showToast('Evento ripristinato')
     })
   }, [confirmDeleteAll])
 
@@ -345,7 +353,7 @@ export default function CalendarPage() {
     for (const ev of futureEvents) {
       await deleteEvent(ev.id)
     }
-    showToast(`${futureEvents.length} eventi eliminati`)
+    showSuccess(`${futureEvents.length} eventi eliminati`)
   }, [confirmDeleteAll, events])
 
   // ─── Loading skeleton ──────────────────────────────────
@@ -533,15 +541,6 @@ export default function CalendarPage() {
         </div>
       </Modal>
 
-      {/* Toast */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          action={toast.action}
-          onAction={toast.onAction}
-          onClose={() => setToast(null)}
-        />
-      )}
     </div>
   )
 }

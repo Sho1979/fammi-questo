@@ -15,9 +15,6 @@
 
 import { normalizeAndValidateActions } from './brain/actionNormalizer.js'
 import { supabase, isSyncEnabled } from './supabase.js'
-import { AI_MODEL, AI_API_URL } from './constants.js'
-
-const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY
 
 /**
  * Check if speech recognition is available.
@@ -130,20 +127,16 @@ export async function parseVoiceWithAI(text, context = {}, localAttempt = null) 
   const todayDayName = dayNames[new Date().getDay()]
   const members = context.members || []
 
-  // ─── Strategy: Edge Function first, direct API fallback ─────
-  // Edge Function keeps ANTHROPIC_API_KEY server-side (no browser exposure)
-  let rawResult
-  if (isSyncEnabled()) {
-    try {
-      rawResult = await callEdgeFunction(text, context, localAttempt, today, todayDayName)
-    } catch (edgeErr) {
-      console.warn('[Voice/L3] Edge Function failed, falling back to direct API:', edgeErr.message)
-    }
+  // ─── Edge Function only (API key stays server-side) ─────
+  if (!isSyncEnabled()) {
+    throw new Error('AI non disponibile: sync non configurato. Il cervellone locale funziona comunque per la maggior parte dei comandi.')
   }
 
-  // Fallback: call Anthropic API directly (requires VITE_ANTHROPIC_API_KEY in .env)
-  if (!rawResult) {
-    rawResult = await callAnthropicDirect(text, context, localAttempt, today, todayDayName, members)
+  let rawResult
+  try {
+    rawResult = await callEdgeFunction(text, context, localAttempt, today, todayDayName)
+  } catch (edgeErr) {
+    throw new Error(`AI non disponibile: ${edgeErr.message}. Il cervellone locale funziona comunque per la maggior parte dei comandi.`)
   }
 
   // ─── Normalizzazione canonica L3 ─────────────────────────
@@ -202,94 +195,3 @@ async function callEdgeFunction(text, context, localAttempt, today, dayName) {
   return { actions: data.actions, summary: data.summary }
 }
 
-/**
- * Fallback: call Anthropic API directly from browser.
- * Used when Edge Function is unavailable (Supabase not configured, or function error).
- * Returns { actions, summary } (raw, pre-normalization).
- */
-async function callAnthropicDirect(text, context, localAttempt, today, todayDayName, members) {
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error('AI non disponibile: la funzione cloud non risponde e nessuna API key è configurata. Il cervellone locale funziona comunque per la maggior parte dei comandi.')
-  }
-
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
-  const personsStr = members.map((m) => `${m.name} (${m.role})`).join(', ')
-  const parentNames = members.filter((m) => m.role === 'genitore' || m.role === 'parent').map((m) => m.name)
-  const currentUser = context.currentMember?.name || 'Utente'
-
-  const systemPrompt = `Sei il cervello di un'app famiglia italiana. Parsi messaggi vocali/testo in azioni strutturate.
-
-OGGI: ${today} (${todayDayName})
-DOMANI: ${tomorrow}
-UTENTE CORRENTE: ${currentUser}
-PERSONE FAMIGLIA: ${personsStr}
-GENITORI: ${parentNames.join(', ')}
-CATEGORIE SPESA: spesa, trasporti, salute, casa, abbigliamento, istruzione, svago, ristorante, bollette, sport, altro
-
-REGOLE DI PARSING:
-1. Un messaggio può contenere MULTIPLE azioni — estraile TUTTE
-2. Tipi azione: "task", "calendar", "expense", "meal", "shopping", "note"
-3. Se una persona è nominata prima di un'azione, quell'azione è per lei
-4. "stasera prepara X" → task cucina + meal
-5. "domani alle 16 dentista" → calendar
-6. "45 euro alimentari" → expense
-7. Se non capisci → "note"
-8. Date: "domani"=${tomorrow}, "oggi"=${today}, "stasera"=${today}
-9. Giorni settimana → calcola la data corretta
-10. "porta [persona]" → accompaniedBy (genitori: ${parentNames.join(', ')})
-11. Ogni azione con data DEVE avere "date" in YYYY-MM-DD
-12. "compra X" → shopping
-
-RISPONDI SOLO con JSON valido:
-{
-  "actions": [
-    { "type": "task", "title": "...", "assignedTo": "Nome", "date": "YYYY-MM-DD" },
-    { "type": "calendar", "title": "...", "date": "YYYY-MM-DD", "time": "HH:mm" },
-    { "type": "expense", "amount": 45.00, "category": "...", "note": "...", "date": "YYYY-MM-DD" },
-    { "type": "meal", "name": "...", "date": "YYYY-MM-DD" },
-    { "type": "shopping", "name": "...", "quantity": 1, "unit": "pz" },
-    { "type": "note", "text": "..." }
-  ],
-  "summary": "2 task, 1 evento, 1 spesa"
-}`
-
-  const response = await fetch(AI_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: AI_MODEL,
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: buildL3UserMessage(text, localAttempt) }],
-    }),
-  })
-
-  if (!response.ok) {
-    const err = await response.text()
-    throw new Error(`API error: ${response.status} — ${err}`)
-  }
-
-  const result = await response.json()
-  let aiText = result.content?.[0]?.text || '{}'
-  aiText = aiText.replace(/^```json\s*/i, '').replace(/\s*```\s*$/, '').trim()
-
-  try {
-    const parsed = JSON.parse(aiText)
-    if (!parsed.actions || !Array.isArray(parsed.actions)) {
-      return { actions: [{ type: 'note', text }], summary: 'Non ho capito — salvato come nota' }
-    }
-
-    // Basic validation
-    const validTypes = ['task', 'calendar', 'expense', 'meal', 'shopping', 'note']
-    const cleaned = parsed.actions.filter(a => a.type && validTypes.includes(a.type))
-
-    return { actions: cleaned.length > 0 ? cleaned : [{ type: 'note', text }], summary: parsed.summary }
-  } catch {
-    return { actions: [{ type: 'note', text }], summary: 'Non ho capito — salvato come nota' }
-  }
-}

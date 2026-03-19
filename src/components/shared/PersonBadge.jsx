@@ -17,7 +17,7 @@ export default function PersonBadge({ member, size = 'md' }) {
     <div className="flex flex-col items-center gap-1">
       <div
         className={`flex items-center justify-center rounded-full ${cfg.circle}`}
-        style={{ backgroundColor: member.color + '22', borderColor: member.color, borderWidth: 2 }}
+        style={{ backgroundColor: (member.color || '#6C5CE7') + '22', borderColor: member.color || '#6C5CE7', borderWidth: 2 }}
         aria-label={member.name}
       >
         <span role="img" aria-hidden="true">{member.icon}</span>

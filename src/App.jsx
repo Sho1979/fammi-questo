@@ -8,6 +8,7 @@
  */
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster } from 'sonner'
 import useAuthStore from './store/authStore.js'
 import { initNativeNotifications } from './lib/nativeNotifications.js'
 import { db } from './lib/localDb.js'
@@ -86,6 +87,13 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <Toaster
+        richColors
+        position="bottom-center"
+        toastOptions={{ className: 'font-sans' }}
+        offset={80}
+        visibleToasts={3}
+      />
       <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* Public routes */}

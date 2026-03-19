@@ -2,6 +2,8 @@
  * R3.2 — MealsPage: weekly meal planner with drag-like slot assignment.
  */
 import { useState, useCallback } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db } from '../lib/localDb.js'
 import useAuthStore from '../store/authStore.js'
 import {
   useWeekMealPlans,
@@ -10,8 +12,11 @@ import {
   getMonday,
   MEAL_SLOTS,
 } from '../hooks/useMeals.js'
-import { Modal, Toast } from '../components/shared/index.js'
-import { ChevronLeft, ChevronRight, Plus, X, Utensils } from 'lucide-react'
+import { Modal, ConfirmDialog } from '../components/shared/index.js'
+import { showSuccess, showUndo } from '../lib/toast.js'
+import { updateRecord } from '../lib/crud.js'
+import EmptyState from '../components/shared/EmptyState.jsx'
+import { ChevronLeft, ChevronRight, Plus, X, Utensils, CalendarDays } from 'lucide-react'
 import { WEEKDAYS_SHORT } from '../lib/constants.js'
 
 const DAY_NAMES = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica']
@@ -19,9 +24,20 @@ const DAY_NAMES = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 
 export default function MealsPage() {
   const { familyId } = useAuthStore()
 
+  const members = useLiveQuery(
+    () => familyId
+      ? db.members.where('family_id').equals(familyId).and((m) => !m._deleted).toArray()
+      : [],
+    [familyId],
+    []
+  )
+
   // Week navigation
   const [weekStart, setWeekStart] = useState(getMonday())
   const plans = useWeekMealPlans(familyId, weekStart)
+
+  // Delete confirmation
+  const [confirmDelete, setConfirmDelete] = useState(null)
 
   // Add form
   const [showAdd, setShowAdd] = useState(false)
@@ -29,7 +45,6 @@ export default function MealsPage() {
   const [addSlot, setAddSlot] = useState('pranzo')
   const [addName, setAddName] = useState('')
   const [addNote, setAddNote] = useState('')
-  const [toast, setToast] = useState(null)
 
   const weekDates = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart)
@@ -66,16 +81,44 @@ export default function MealsPage() {
       note: addNote.trim(),
     })
     setShowAdd(false)
-    setToast({ message: 'Pasto aggiunto' })
+    showSuccess('Pasto aggiunto')
   }, [addDate, addSlot, addName, addNote])
 
-  const handleDelete = async (id) => {
-    await deleteMealPlan(id)
-    setToast({ message: 'Pasto rimosso' })
+  const handleDelete = (id, name) => {
+    setConfirmDelete({ id, name: name || 'questo pasto' })
   }
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (confirmDelete) {
+      const deletedId = confirmDelete.id
+      await deleteMealPlan(deletedId)
+      showUndo('Pasto rimosso', async () => {
+        await updateRecord('mealPlans', deletedId, { _deleted: false })
+      })
+    }
+    setConfirmDelete(null)
+  }, [confirmDelete])
 
   // Get today for highlighting
   const today = new Date().toISOString().slice(0, 10)
+
+  // Check if any meals are planned this week
+  const hasAnyMeals = plans.length > 0
+
+  // Loading skeleton
+  if (familyId && members.length === 0) {
+    return (
+      <div className="flex flex-col gap-3.5 px-4 py-4 pb-24" style={{ background: 'var(--bg-main)' }}>
+        <div className="animate-pulse space-y-3">
+          <div className="h-8 bg-gray-200 rounded-xl w-1/3" />
+          <div className="h-10 bg-gray-200 rounded-xl" />
+          <div className="h-28 bg-gray-200 rounded-2xl" />
+          <div className="h-28 bg-gray-200 rounded-2xl" />
+          <div className="h-28 bg-gray-200 rounded-2xl" />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-4 px-4 py-4 pb-24">
@@ -103,6 +146,17 @@ export default function MealsPage() {
         </button>
       </div>
 
+      {/* Empty state hint */}
+      {!hasAnyMeals && (
+        <div className="rounded-2xl bg-violet-50 border border-violet-100 p-4 text-center">
+          <Utensils size={28} className="mx-auto text-violet-300 mb-2" />
+          <p className="text-sm font-semibold text-violet-700">Nessun pasto pianificato</p>
+          <p className="text-xs text-violet-400 mt-1">
+            Tocca i pulsanti <span className="font-medium">+ Colazione / Pranzo / Cena</span> qui sotto per organizzare la settimana
+          </p>
+        </div>
+      )}
+
       {/* Week grid */}
       {weekDates.map((date, dayIdx) => {
         const dayPlans = plans.filter((p) => p.date === date)
@@ -125,7 +179,7 @@ export default function MealsPage() {
                     {meal ? (
                       <div className="flex-1 flex items-center justify-between bg-white rounded-lg px-2 py-1 border border-gray-100">
                         <span className="text-xs text-gray-700">{meal.name}</span>
-                        <button type="button" onClick={() => handleDelete(meal.id)}
+                        <button type="button" onClick={() => handleDelete(meal.id, meal.name)}
                           className="p-0.5 text-gray-300 hover:text-red-500">
                           <X size={12} />
                         </button>
@@ -193,7 +247,17 @@ export default function MealsPage() {
         </div>
       </Modal>
 
-      {toast && <Toast message={toast.message} onClose={() => setToast(null)} />}
+      {/* Confirm delete dialog */}
+      <ConfirmDialog
+        isOpen={confirmDelete !== null}
+        title="Elimina pasto"
+        message={confirmDelete ? `Vuoi eliminare "${confirmDelete.name}"?` : ''}
+        confirmLabel="Elimina"
+        danger
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setConfirmDelete(null)}
+      />
+
     </div>
   )
 }

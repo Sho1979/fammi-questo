@@ -17,7 +17,7 @@ import { showNativeNotification } from '../lib/nativeNotifications.js'
 // ─── Actions ────────────────────────────────────────────────────
 
 /** Create a notification for a specific member. */
-export async function notify(memberId, { type, title, message, icon, data }) {
+export async function notify(memberId, { type, title, message, icon, data, message_context_id }) {
   const familyId = useAuthStore.getState().familyId
   if (!familyId) return
 
@@ -30,6 +30,7 @@ export async function notify(memberId, { type, title, message, icon, data }) {
     icon: icon || '📌',
     read: false,
     data: data || null,
+    message_context_id: message_context_id || null,
   })
 
   // Trigger native push se la notifica è per il membro corrente sul dispositivo
@@ -106,6 +107,56 @@ export async function markAllAsRead() {
   }
 }
 
+/**
+ * Clustered notification: sends ONE notification for multiple actions
+ * born from the same message (same message_context_id).
+ *
+ * Instead of 3 separate notifications for "porta Viola, compra latte, ricordami bollo",
+ * sends: "Dal messaggio di Cristian: portare Viola, comprare latte, ricordare bollo"
+ */
+export async function notifyCluster(messageContextId, { senderName, senderIcon, actions, excludeMemberId }) {
+  if (!actions || actions.length === 0) return
+
+  // Single action = normal notification, no cluster
+  if (actions.length === 1) {
+    const a = actions[0]
+    const typeEmoji = { calendar: '📅', task: '📌', expense: '💰', shopping: '🛒', meal: '🍽️', reminder: '🔔', note: '📝' }
+    await notifyAll({
+      type: a.type || 'general',
+      title: `${senderIcon || '👤'} ${senderName}`,
+      message: `${typeEmoji[a.type] || '📌'} ${a.title || a.text || a.name || ''}`,
+      icon: typeEmoji[a.type] || '📌',
+      data: { message_context_id: messageContextId },
+      excludeMemberId,
+    })
+    return
+  }
+
+  // Multiple actions = cluster notification
+  const typeEmoji = { calendar: '📅', task: '📌', expense: '💰', shopping: '🛒', meal: '🍽️', reminder: '🔔', note: '📝' }
+  const actionSummaries = actions.map(a => {
+    const emoji = typeEmoji[a.type] || '📌'
+    const label = a.title || a.text || a.name || a.type
+    return `${emoji} ${label}`
+  })
+
+  const title = `${senderIcon || '👤'} ${senderName} — ${actions.length} azioni`
+  const message = actionSummaries.join('\n')
+
+  await notifyAll({
+    type: 'brain_cluster',
+    title,
+    message,
+    icon: '🧠',
+    data: {
+      message_context_id: messageContextId,
+      action_count: actions.length,
+      action_types: actions.map(a => a.type),
+    },
+    excludeMemberId,
+  })
+}
+
 // ─── Convenience helpers (match api.php patterns) ───────────────
 
 export const notifyEvents = {
@@ -173,7 +224,7 @@ export const notifyEvents = {
   expenseAdded: async (personName, personIcon, amount, note) => {
     await notifyParents({
       type: 'expense',
-      title: `${personIcon || '👤'} ${personName} ha speso ${amount.toFixed(2)}€`,
+      title: `${personIcon || '👤'} ${personName} ha speso ${(amount || 0).toFixed(2)}€`,
       message: note || '',
       icon: '💰',
     })
@@ -203,7 +254,7 @@ export const notifyEvents = {
 
   /** Meal assigned: notify cook */
   mealAssigned: async (cookId, dish, slot) => {
-    const slotEmoji = slot === 'pranzo' ? '🍝' : '🍽️'
+    const slotEmoji = (slot === 'pranzo' || slot === 'lunch') ? '🍝' : '🍽️'
     if (cookId) {
       await notify(cookId, {
         type: 'meal',

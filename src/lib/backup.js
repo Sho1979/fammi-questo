@@ -12,6 +12,7 @@ const TABLES = [
   'family', 'members', 'expenses', 'budgets', 'events',
   'tasks', 'taskTemplates', 'meals', 'mealPlans', 'shoppingItems',
   'inventory', 'rewards', 'recurrences', 'notifications', 'settings',
+  'messageContexts', 'entityRelations',
 ]
 
 /**

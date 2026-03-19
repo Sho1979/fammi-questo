@@ -13,7 +13,8 @@ import useAuthStore from '../store/authStore.js'
 import { useWeeklyLeaderboard, useCompletedTasksStats } from '../hooks/useTasks.js'
 import { awardBonus, deductPoints } from '../hooks/useRewards.js'
 import { validateBonusPoints } from '../lib/validate.js'
-import { Modal, Toast } from '../components/shared/index.js'
+import { Modal } from '../components/shared/index.js'
+import { showSuccess } from '../lib/toast.js'
 import { Trophy, Star, Plus, Minus, Info, Award } from 'lucide-react'
 
 const MEDAL = ['🥇', '🥈', '🥉']
@@ -41,7 +42,6 @@ export default function RewardsPage() {
   const [bonusReason, setBonusReason] = useState('')
   const [isDeduct, setIsDeduct] = useState(false)
   const [showInfo, setShowInfo] = useState(false)
-  const [toast, setToast] = useState(null)
   const [bonusError, setBonusError] = useState('')
 
   const handleAward = async () => {
@@ -54,15 +54,30 @@ export default function RewardsPage() {
     const pts = parseInt(bonusPoints, 10)
     if (isDeduct) {
       await deductPoints(bonusMemberId, pts, bonusReason)
-      setToast({ message: `${pts} punti detratti` })
+      showSuccess(`${pts} punti detratti`)
     } else {
       await awardBonus(bonusMemberId, pts, bonusReason)
-      setToast({ message: `${pts} punti assegnati!` })
+      showSuccess(`${pts} punti assegnati!`)
     }
     setShowBonus(false)
     setBonusPoints('')
     setBonusReason('')
     setBonusError('')
+  }
+
+  // Loading skeleton
+  if (familyId && members.length === 0) {
+    return (
+      <div className="flex flex-col gap-3.5 px-4 py-4 pb-24" style={{ background: 'var(--bg-main)' }}>
+        <div className="animate-pulse space-y-3">
+          <div className="h-8 bg-gray-200 rounded-xl w-1/3" />
+          <div className="h-28 bg-amber-100 rounded-2xl" />
+          <div className="h-20 bg-gray-200 rounded-2xl" />
+          <div className="h-20 bg-gray-200 rounded-2xl" />
+          <div className="h-20 bg-gray-200 rounded-2xl" />
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -294,7 +309,6 @@ export default function RewardsPage() {
         </div>
       </Modal>
 
-      {toast && <Toast message={toast.message} onClose={() => setToast(null)} />}
     </div>
   )
 }

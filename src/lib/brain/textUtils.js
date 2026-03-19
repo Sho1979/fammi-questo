@@ -101,7 +101,8 @@ export function fuzzyMatch(input, targets) {
 const STOPWORDS = new Set([
   'il', 'lo', 'la', 'le', 'li', 'gli', 'un', 'uno', 'una',
   'di', 'a', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra',
-  'e', 'o', 'ma', 'che', 'non', 'si', 'mi', 'ti', 'ci', 'vi', 'ne',
+  'e', 'o', 'ma', 'che', 'si', 'mi', 'ti', 'ci', 'vi', 'ne',
+  // "non" RIMOSSO da stopwords — deve essere visibile al parser per gestire negazioni
   'al', 'del', 'dal', 'nel', 'sul', 'allo', 'dello', 'dallo', 'nello', 'sullo',
   'alla', 'della', 'dalla', 'nella', 'sulla',
   'alle', 'delle', 'dalle', 'nelle', 'sulle',
@@ -126,6 +127,28 @@ export function tokenizeForMatching(text) {
   return tokenize(text).filter(t => !STOPWORDS.has(t) && t.length > 1)
 }
 
+/**
+ * Detect negation in a sentence. Returns true if the sentence
+ * contains a negation that should prevent action creation.
+ *
+ * Patterns:
+ *   "non comprare X"  -> true (negated action)
+ *   "niente spesa"     -> true (negated intent)
+ *   "non X" before a verb -> true
+ *   "ricordami di NON X" -> false (negation is the CONTENT, not the intent)
+ */
+const NEGATION_PATTERNS = [
+  /^non\s+(?:comprare|compra|portare|porta|prendere|prendi|fare|fai|andare|vai)\b/i,
+  /^(?:niente|nessun[oa]?)\s+(?:spesa|shopping|compere|acquisti)\b/i,
+  /^(?:oggi|domani|stasera)\s+(?:non|niente)\b/i,
+  /^non\s+(?:serve|servono|occorre|bisogna)\b/i,
+]
+
+export function isNegatedAction(sentence) {
+  const trimmed = sentence.trim().toLowerCase()
+  return NEGATION_PATTERNS.some(re => re.test(trimmed))
+}
+
 // ═══════════════════════════════════════════════════════════════
 // SENTENCE SPLITTER
 // ═══════════════════════════════════════════════════════════════
@@ -144,20 +167,75 @@ export function tokenizeForMatching(text) {
  *   - Interruzioni parlato: "ah e", "ah anche", "ah poi", "e anche"
  *   - Virgole tra frasi lunghe (≥3 parole ciascuna)
  */
+/**
+ * Verbi d'azione che segnalano un cambio di intent quando preceduti da "e" o ",".
+ * "Luca e Giulia" non splitta (congiunzione tra entità, non verbo dopo "e").
+ * "e compra latte" splitta (cambio intent: verbo d'azione dopo "e").
+ */
+const ACTION_VERBS_RE = /^(?:compra|comprare|prendi|prendere|porta|portare|segna|segnare|ricordami|ricordaci|ricorda|avvisami|avvisaci|prenota|prenotare|paga|pagare|chiama|chiamare|fissa|fissare|lava|lavare|pulisci|pulire|stira|stirare|prepara|preparare|cucina|cucinare|ordina|ordinare|metti|mettere|togli|togliere|butta|buttare|controlla|controllare|sistema|sistemare|svuota|svuotare|riordina|riordinare|stendi|stendere|apparecchia|sparecchia|spazza|aspira|innaffia|firma|firmare|stampa|stampare|rinnova|rinnovare|iscrivere|iscrivi|consegna|consegnare)$/i
+
 export function splitSentences(text) {
   // Proteggi i punti negli orari (16.30, 8.00) e nei decimali (3.50 euro)
-  // sostituendoli con un placeholder prima dello split
   const protected_ = text.replace(/(\d)[.](\d)/g, '$1\x00$2')
 
-  return protected_
+  // Phase 1: split on explicit delimiters and Italian speech interruptions
+  const phase1 = protected_
     .split(/[.;!?]+|\bah\s+(?:e|anche|poi)\b|\be\s+poi\b|\be\s+anche\b|\binoltre\b|\bdopo(?:diché)?\b|\bpoi\s+anche\b/i)
-    .flatMap(s => {
-      const parts = s.split(',')
-      if (parts.length > 1 && parts.every(p => p.trim().split(/\s+/).length >= 3)) {
-        return parts
+
+  // Phase 2: verb-transition splitting on "e" and ","
+  // Split when "e" or "," is followed by a known action verb (= intent change).
+  // "Luca e Giulia" stays together (Giulia is not a verb).
+  // "e compra latte" splits (compra is an action verb).
+  const phase2 = phase1.flatMap(segment => {
+    // Try verb-transition split on " e " first
+    const ePattern = /\s+e\s+/gi
+    const parts = []
+    let lastIdx = 0
+    let match
+
+    while ((match = ePattern.exec(segment)) !== null) {
+      const afterE = segment.slice(match.index + match[0].length).trim()
+      const firstWordAfterE = afterE.split(/\s+/)[0]
+
+      if (firstWordAfterE && ACTION_VERBS_RE.test(firstWordAfterE)) {
+        // Split here: action verb after "e" = new intent
+        parts.push(segment.slice(lastIdx, match.index))
+        lastIdx = match.index + match[0].length
+      }
+      // else: "Luca e Giulia" → don't split
+    }
+    parts.push(segment.slice(lastIdx))
+
+    // Phase 2b: comma split — split on "," when followed by action verb OR
+    // when all parts have ≥3 words (original behavior)
+    return parts.flatMap(s => {
+      const commaParts = s.split(',')
+      if (commaParts.length <= 1) return [s]
+
+      // Check if any comma is followed by an action verb
+      const verbSplit = []
+      let current = commaParts[0]
+      for (let i = 1; i < commaParts.length; i++) {
+        const firstWord = commaParts[i].trim().split(/\s+/)[0]
+        if (firstWord && ACTION_VERBS_RE.test(firstWord)) {
+          verbSplit.push(current)
+          current = commaParts[i]
+        } else {
+          current += ',' + commaParts[i]
+        }
+      }
+      verbSplit.push(current)
+      if (verbSplit.length > 1) return verbSplit
+
+      // Fallback: original comma-split when all parts have ≥3 words
+      if (commaParts.every(p => p.trim().split(/\s+/).length >= 3)) {
+        return commaParts
       }
       return [s]
     })
-    .map(s => s.replace(/\x00/g, '.').trim()) // Ripristina i punti protetti
+  })
+
+  return phase2
+    .map(s => s.replace(/\x00/g, '.').trim())
     .filter(s => s.length > 2)
 }

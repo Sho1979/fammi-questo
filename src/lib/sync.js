@@ -60,10 +60,15 @@ const TABLE_MAP = {
   rewards: 'rewards',
   recurrences: 'recurrences',
   notifications: 'notifications',
+  messageContexts: 'message_contexts',
+  entityRelations: 'entity_relations',
 }
 
 // Tables to sync (all except syncLog, settings, priceHistory, patterns, brainNotes)
 const SYNC_TABLES = Object.keys(TABLE_MAP)
+
+// ─── Sync mutex: prevent concurrent sync operations ─────────
+let _syncInProgress = false
 
 /**
  * Generate a 6-char uppercase invite code.
@@ -100,7 +105,6 @@ export async function pushToCloud(familyId, onProgress, syncKey) {
     try {
       let records
       if (localTable === 'family') {
-        // Family table: single record by id
         const fam = await db.family.get(familyId)
         records = fam ? [fam] : []
       } else {
@@ -112,34 +116,8 @@ export async function pushToCloud(familyId, onProgress, syncKey) {
 
       if (records.length === 0) continue
 
-      // Fetch remote updated_at for comparison (only ids we have locally)
-      const localIds = records.map((r) => r.id)
-      const remoteMap = new Map()
-      // Fetch in batches of 100 ids
-      for (let i = 0; i < localIds.length; i += 100) {
-        const idBatch = localIds.slice(i, i + 100)
-        const { data: remoteRows } = await supabase
-          .from(remoteTable)
-          .select('id, updated_at')
-          .in('id', idBatch)
-        if (remoteRows) {
-          for (const r of remoteRows) remoteMap.set(r.id, r.updated_at)
-        }
-      }
-
-      // Filter: only push records where local is newer than remote (or new)
-      const toPush = records.filter((r) => {
-        const remoteUpdatedAt = remoteMap.get(r.id)
-        if (!remoteUpdatedAt) return true // new record, not on cloud yet
-        const localTime = new Date(r.updated_at).getTime()
-        const remoteTime = new Date(remoteUpdatedAt).getTime()
-        return localTime > remoteTime
-      })
-
-      if (toPush.length === 0) continue
-
       // Convert timestamps to ISO strings for Supabase
-      const cleaned = toPush.map((r) => ({
+      const cleaned = records.map((r) => ({
         ...r,
         created_at: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
         updated_at: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
@@ -153,12 +131,14 @@ export async function pushToCloud(familyId, onProgress, syncKey) {
         )
       }
 
-      // Upsert in batches of 100
-      for (let i = 0; i < readyToPush.length; i += 100) {
-        const batch = readyToPush.slice(i, i + 100)
-        const { error } = await supabase
-          .from(remoteTable)
-          .upsert(batch, { onConflict: 'id' })
+      // Atomic conditional upsert via RPC: only writes if incoming updated_at > existing.
+      // Eliminates TOCTOU race condition (no separate read-then-write).
+      for (let i = 0; i < readyToPush.length; i += 50) {
+        const batch = readyToPush.slice(i, i + 50)
+        const { error } = await supabase.rpc('conditional_upsert', {
+          p_table: remoteTable,
+          p_records: batch,
+        })
 
         if (error) {
           console.error(`[Sync] Push error on ${remoteTable}:`, error)
@@ -217,52 +197,53 @@ export async function pullFromCloud(familyId, onProgress, syncKey) {
         )
       }
 
-      // Smart merge: compare updated_at before overwriting local data
+      // Smart merge: compare updated_at before overwriting local data.
+      // Wrapped in Dexie transaction to prevent TOCTOU: a concurrent local
+      // updateRecord() between get() and put() would be lost without this.
       for (const remoteRecord of decryptedData) {
-        const localRecord = await db[localTable].get(remoteRecord.id)
-        if (!localRecord) {
-          // New record from cloud — insert locally
-          await db[localTable].add(remoteRecord)
-        } else {
-          const remoteTime = new Date(remoteRecord.updated_at).getTime()
-          const localTime = new Date(localRecord.updated_at).getTime()
+        await db.transaction('rw', [db[localTable], db.conflictLog], async () => {
+          const localRecord = await db[localTable].get(remoteRecord.id)
+          if (!localRecord) {
+            // New record from cloud — insert locally (put instead of add to avoid
+            // ConstraintError if record was partially synced in a previous cycle)
+            await db[localTable].put(remoteRecord)
+          } else {
+            const remoteTime = new Date(remoteRecord.updated_at).getTime()
+            const localTime = new Date(localRecord.updated_at).getTime()
 
-          // Detect conflict: both changed on different devices
-          const isConflict = remoteTime !== localTime &&
-            localRecord._device_id && remoteRecord._device_id &&
-            localRecord._device_id !== remoteRecord._device_id
+            // Detect conflict: both changed on different devices
+            const isConflict = remoteTime !== localTime &&
+              localRecord._device_id && remoteRecord._device_id &&
+              localRecord._device_id !== remoteRecord._device_id
 
-          if (isConflict) {
-            // Log the conflict before resolving
-            try {
-              await db.conflictLog.add({
-                family_id: familyId,
-                table_name: localTable,
-                record_id: remoteRecord.id,
-                local_updated_at: localRecord.updated_at,
-                local_updated_by: localRecord.updated_by || null,
-                local_device_id: localRecord._device_id,
-                remote_updated_at: remoteRecord.updated_at,
-                remote_updated_by: remoteRecord.updated_by || null,
-                remote_device_id: remoteRecord._device_id,
-                resolved_by: remoteTime > localTime ? 'remote' : 'local',
-                resolved_at: new Date().toISOString(),
-              })
-            } catch (logErr) {
-              console.warn('[Sync] Failed to log conflict:', logErr)
+            if (isConflict) {
+              try {
+                await db.conflictLog.add({
+                  family_id: familyId,
+                  table_name: localTable,
+                  record_id: remoteRecord.id,
+                  local_updated_at: localRecord.updated_at,
+                  local_updated_by: localRecord.updated_by || null,
+                  local_device_id: localRecord._device_id,
+                  remote_updated_at: remoteRecord.updated_at,
+                  remote_updated_by: remoteRecord.updated_by || null,
+                  remote_device_id: remoteRecord._device_id,
+                  resolved_by: remoteTime > localTime ? 'remote' : 'local',
+                  resolved_at: new Date().toISOString(),
+                })
+              } catch (logErr) {
+                console.warn('[Sync] Failed to log conflict:', logErr)
+              }
+            }
+
+            if (isConflict && FIELD_MERGE_TABLES.has(localTable)) {
+              const merged = mergeByField(localRecord, remoteRecord)
+              await db[localTable].put(merged)
+            } else if (remoteTime > localTime) {
+              await db[localTable].put(remoteRecord)
             }
           }
-
-          if (isConflict && FIELD_MERGE_TABLES.has(localTable)) {
-            // Field-level merge for shopping items and similar tables
-            const merged = mergeByField(localRecord, remoteRecord)
-            await db[localTable].put(merged)
-          } else if (remoteTime > localTime) {
-            // Remote is newer — overwrite local
-            await db[localTable].put(remoteRecord)
-          }
-          // else: local is newer or equal — skip (will be pushed later)
-        }
+        })
       }
     } catch (err) {
       console.error(`[Sync] Failed to pull ${localTable}:`, err)
@@ -280,16 +261,25 @@ export async function pullFromCloud(familyId, onProgress, syncKey) {
  * @param {CryptoKey} [syncKey] — AES-GCM key; if provided, sync is encrypted
  */
 export async function fullSync(familyId, onProgress, syncKey) {
-  // Push first (local wins for any conflicts during push)
-  await pushToCloud(familyId, (p) =>
-    onProgress?.({ phase: 'push', ...p }),
-    syncKey
-  )
-  // Then pull (remote wins for newer records)
-  await pullFromCloud(familyId, (p) =>
-    onProgress?.({ phase: 'pull', ...p }),
-    syncKey
-  )
+  if (_syncInProgress) {
+    console.warn('[Sync] Sync already in progress, skipping')
+    return { skipped: true }
+  }
+  _syncInProgress = true
+  try {
+    // Push first (local wins for any conflicts during push)
+    await pushToCloud(familyId, (p) =>
+      onProgress?.({ phase: 'push', ...p }),
+      syncKey
+    )
+    // Then pull (remote wins for newer records)
+    await pullFromCloud(familyId, (p) =>
+      onProgress?.({ phase: 'pull', ...p }),
+      syncKey
+    )
+  } finally {
+    _syncInProgress = false
+  }
 }
 
 /**

@@ -1,5 +1,5 @@
 /**
- * VoiceButton — Floating mic button that triggers the Brain flow.
+ * VoiceButton — Floating draggable mic button that triggers the Brain flow.
  *
  * Questo è solo il bottone floating. Tutto il flusso (parsing, preview,
  * esecuzione, apprendimento) è gestito da useBrain + BrainSheet.
@@ -11,8 +11,11 @@
  *   preview → nascosto (la sheet è aperta)
  *   done → verde
  *   error → rosso
+ *
+ * DRAGGABLE: l'utente può trascinare il bottone in qualsiasi posizione
+ * per evitare che copra contenuti importanti.
  */
-import { memo } from 'react'
+import { memo, useState, useRef, useCallback } from 'react'
 import { Mic, MicOff, Loader2, Brain } from 'lucide-react'
 import { hapticMedium } from '../../lib/haptics.js'
 import { isIOS } from '../../lib/platform.js'
@@ -24,6 +27,62 @@ export default memo(function VoiceButton({ phase, onPress, speechAvailable }) {
   if (phase === 'preview') return null
 
   const isActive = phase === 'listening' || phase === 'parsing' || phase === 'executing'
+
+  // --- Draggable state ---
+  const [position, setPosition] = useState({
+    right: 16,
+    bottom: isIOS ? 128 : 112,  // ~7rem
+  })
+  const dragRef = useRef({
+    isDragging: false,
+    startX: 0,
+    startY: 0,
+    startRight: 0,
+    startBottom: 0,
+    moved: false,
+  })
+
+  const handleTouchStart = useCallback((e) => {
+    const touch = e.touches[0]
+    dragRef.current = {
+      isDragging: true,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      startRight: position.right,
+      startBottom: position.bottom,
+      moved: false,
+    }
+  }, [position])
+
+  const handleTouchMove = useCallback((e) => {
+    if (!dragRef.current.isDragging) return
+    const touch = e.touches[0]
+    const deltaX = dragRef.current.startX - touch.clientX
+    const deltaY = dragRef.current.startY - touch.clientY
+
+    // Solo se si è mosso abbastanza consideriamo drag
+    if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
+      dragRef.current.moved = true
+      e.preventDefault() // Evita scroll durante il drag
+
+      const newRight = Math.max(8, Math.min(window.innerWidth - 64, dragRef.current.startRight + deltaX))
+      const newBottom = Math.max(80, Math.min(window.innerHeight - 80, dragRef.current.startBottom + deltaY))
+
+      setPosition({ right: newRight, bottom: newBottom })
+    }
+  }, [])
+
+  const handleTouchEnd = useCallback(() => {
+    const wasDragging = dragRef.current.moved
+    dragRef.current.isDragging = false
+    dragRef.current.moved = false
+
+    // Se NON si è mosso, è un tap → attiva il voice
+    if (!wasDragging) {
+      hapticMedium()
+      onPress()
+    }
+  }, [onPress])
 
   const getStyle = () => {
     switch (phase) {
@@ -72,24 +131,29 @@ export default memo(function VoiceButton({ phase, onPress, speechAvailable }) {
     }
   }
 
-  const handlePress = () => {
-    hapticMedium()
-    onPress()
-  }
-
-  // iOS: posiziona più in alto per il safe area bottom (home indicator)
-  const bottomOffset = isIOS ? 'calc(7rem + env(safe-area-inset-bottom, 0px))' : '7rem'
-
   return (
     <button
       type="button"
-      onClick={handlePress}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onClick={(e) => {
+        // Desktop click fallback (touch non disponibile)
+        if (!('ontouchstart' in window)) {
+          hapticMedium()
+          onPress()
+        }
+      }}
       disabled={isActive}
-      className={`fixed right-4 z-50 flex items-center justify-center
-        w-14 h-14 rounded-full transition-all duration-300
-        ${phase === 'listening' ? 'scale-110' : 'hover:scale-105 active:scale-95'}
-        disabled:cursor-not-allowed`}
-      style={{ ...getStyle(), bottom: bottomOffset }}
+      className={`fixed z-50 flex items-center justify-center
+        w-14 h-14 rounded-full transition-colors duration-300
+        ${phase === 'listening' ? 'scale-110' : ''}
+        disabled:cursor-not-allowed touch-none`}
+      style={{
+        ...getStyle(),
+        right: `${position.right}px`,
+        bottom: `${position.bottom}px`,
+      }}
       aria-label="Brain — input vocale"
     >
       {getIcon()}

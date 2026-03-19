@@ -8,8 +8,11 @@ import useAuthStore from '../store/authStore.js'
 import { exportBackup, importBackup, downloadBlob } from '../lib/backup.js'
 import { isSyncEnabled } from '../lib/supabase.js'
 import { registerFamilyOnCloud, joinFamilyByCode } from '../lib/sync.js'
-import { PersonBadge, ConfirmDialog, Modal, Toast } from '../components/shared/index.js'
-import { Users, Database, LogOut, Trash2, Download, Upload, Shield, Cloud, CloudOff, UserPlus, Copy, RefreshCw, Eye, Wifi, WifiOff, HardDrive, QrCode, CheckCircle, AlertCircle } from 'lucide-react'
+import { PersonBadge, ConfirmDialog, Modal } from '../components/shared/index.js'
+import { showSuccess, showError } from '../lib/toast.js'
+import { Users, Database, LogOut, Trash2, Download, Upload, Shield, Cloud, CloudOff, UserPlus, Copy, RefreshCw, Eye, Wifi, WifiOff, HardDrive, QrCode, CheckCircle, AlertCircle, Brain } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { canAccessBrainDebug } from '../lib/brain/debugAnalytics.js'
 import useOnline from '../hooks/useOnline.js'
 import useSync from '../hooks/useSync.js'
 import JoinFamily from '../components/sync/JoinFamily.jsx'
@@ -24,7 +27,6 @@ export default function SettingsPage() {
   const [showImport, setShowImport] = useState(false)
   const [importing, setImporting] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const [toast, setToast] = useState(null)
   // Pass sessionPin to enable encrypted sync (key derived from PIN + syncSecret)
   const { syncState, startSync, progress: syncProgress, lastSyncAt, error: syncError, SYNC_STATES } = useSync(familyId, sessionPin)
   const [inviteCode, setInviteCode] = useState('')
@@ -34,6 +36,7 @@ export default function SettingsPage() {
   const [showShareFamily, setShowShareFamily] = useState(false)
   const [showJoinFamily, setShowJoinFamily] = useState(false)
   const fileRef = useRef(null)
+  const navigate = useNavigate()
 
   // Family info
   const family = useLiveQuery(
@@ -115,6 +118,22 @@ export default function SettingsPage() {
       db.settings.clear(),
     ])
     fullReset()
+  }
+
+  // Loading skeleton
+  if (familyId && members.length === 0) {
+    return (
+      <div className="flex flex-col gap-3.5 px-4 py-4 pb-24" style={{ background: 'var(--bg-main)' }}>
+        <div className="animate-pulse space-y-3">
+          <div className="h-8 bg-gray-200 rounded-xl w-1/2" />
+          <div className="h-24 bg-gray-200 rounded-2xl" />
+          <div className="h-32 bg-gray-200 rounded-2xl" />
+          <div className="h-24 bg-gray-200 rounded-2xl" />
+          <div className="h-14 bg-gray-200 rounded-2xl" />
+          <div className="h-14 bg-gray-200 rounded-2xl" />
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -258,12 +277,12 @@ export default function SettingsPage() {
             setImporting(true)
             try {
               const result = await importBackup(file, backupPin)
-              setToast({ message: `Importati ${result.records} record da ${result.tables} tabelle` })
+              showSuccess(`Importati ${result.records} record da ${result.tables} tabelle`)
               setShowImport(false)
               // Reload to reflect imported data
               setTimeout(() => window.location.reload(), 1500)
             } catch (err) {
-              setToast({ message: err.message || 'Errore importazione' })
+              showError(err.message || 'Errore importazione')
             }
             setImporting(false)
             e.target.value = ''
@@ -374,6 +393,18 @@ export default function SettingsPage() {
           Cambia utente
         </button>
 
+        {canAccessBrainDebug(currentMember) && (
+          <button
+            type="button"
+            onClick={() => navigate('/brain-debug')}
+            className="flex items-center justify-center gap-2 w-full rounded-xl border border-violet-200
+              px-4 py-3 text-sm font-medium text-violet-700 hover:bg-violet-50 transition-colors"
+          >
+            <Brain size={16} />
+            Brain Debug & Stress Test
+          </button>
+        )}
+
         <button
           type="button"
           onClick={handleResetStep1}
@@ -418,7 +449,7 @@ export default function SettingsPage() {
           mode="join"
           onJoined={(familyData) => {
             setShowJoinFamily(false)
-            setToast({ message: `Unito alla famiglia ${familyData.name}!` })
+            showSuccess(`Unito alla famiglia ${familyData.name}!`)
             setTimeout(() => window.location.reload(), 1500)
           }}
           onClose={() => setShowJoinFamily(false)}
@@ -455,9 +486,9 @@ export default function SettingsPage() {
             const blob = await exportBackup(backupPin)
             const date = new Date().toISOString().slice(0, 10)
             downloadBlob(blob, `family-backup-${date}.fmbackup`)
-            setToast({ message: 'Backup esportato!' })
+            showSuccess('Backup esportato!')
           } catch (err) {
-            setToast({ message: 'Errore esportazione' })
+            showError('Errore esportazione')
           }
           setExporting(false)
           setShowExport(false)
@@ -509,7 +540,6 @@ export default function SettingsPage() {
         danger
       />
 
-      {toast && <Toast message={toast.message} onClose={() => setToast(null)} />}
     </div>
   )
 }

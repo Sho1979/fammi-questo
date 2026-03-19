@@ -16,6 +16,8 @@ import NotifBanner from '../notifications/NotifBanner.jsx'
 import ErrorBoundary from '../shared/ErrorBoundary.jsx'
 import useBrain from '../../hooks/useBrain.js'
 import useKeyboard from '../../hooks/useKeyboard.js'
+import useInactivityTimeout from '../../hooks/useInactivityTimeout.js'
+import { logout } from '../../hooks/useAuth.js'
 import { trackEvent } from '../../lib/telemetry.js'
 import { isIOS } from '../../lib/platform.js'
 
@@ -43,6 +45,9 @@ export default function AppShell() {
   const location = useLocation()
   const { isOpen: keyboardOpen } = useKeyboard()
 
+  // Auto-logout dopo 15 minuti di inattivita' (sicurezza su tablet condivisi)
+  useInactivityTimeout(logout, 15 * 60 * 1000)
+
   // Traccia page view per telemetria locale
   useEffect(() => {
     const event = PAGE_EVENT_MAP[location.pathname]
@@ -52,12 +57,11 @@ export default function AppShell() {
   return (
     <ErrorBoundary>
     <BrainContext.Provider value={brain}>
-      <div className={`flex flex-col bg-gray-50 ${isIOS ? 'h-screen overflow-hidden' : 'min-h-screen'}`}>
+      <div className="flex flex-col h-[100dvh] overflow-hidden" style={{ background: 'var(--bg-main)' }}>
         <Header />
         <NotifBanner />
         <main className={`flex-1 overflow-y-auto scroll-container ${isIOS ? 'pb-24' : 'pb-20'}`}
           style={{
-            // iOS: momentum scrolling + contenimento overscroll
             WebkitOverflowScrolling: 'touch',
             overscrollBehaviorY: 'contain',
           }}

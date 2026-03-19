@@ -1,7 +1,7 @@
 /**
  * Header — Gradient background with decorative elements, refined typography.
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, Settings } from 'lucide-react'
 import useAuthStore from '../../store/authStore.js'
@@ -15,6 +15,18 @@ export default function Header() {
   const navigate = useNavigate()
   const { currentMember, familyId } = useAuthStore()
   const [showNotifs, setShowNotifs] = useState(false)
+  const [isOffline, setIsOffline] = useState(!navigator.onLine)
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false)
+    const handleOffline = () => setIsOffline(true)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
 
   // Status bar: testo bianco su sfondo viola (entrambe le piattaforme)
   useStatusBar({ style: 'light', color: '#6C5CE7' })
@@ -84,6 +96,12 @@ export default function Header() {
           </div>
         </div>
       </header>
+
+      {isOffline && (
+        <div className="bg-amber-500 text-white text-xs text-center py-1 px-2 font-medium">
+          Offline — i dati sono salvati localmente
+        </div>
+      )}
 
       {/* Notification drawer */}
       <Modal
