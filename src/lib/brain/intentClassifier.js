@@ -231,45 +231,81 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       continue
     }
 
-    // ─── L0-EDIT: Frasi di modifica/cancellazione → azione speciale "edit_request" ───
-    // Non parsing completo: genera un'azione di tipo "edit_request" con hint su cosa modificare.
-    // La UI mostrera' un messaggio guidato ("Vai in Calendario per modificare").
+    // ─── L0-EDIT: Frasi di modifica/cancellazione → edit_action con search/patch ───
+    // Produce un'azione strutturata per il Resolver (dbResolver.js).
     const editPatterns = [
       { re: /^(?:cancella|elimina|rimuovi|togli)\s+/i, verb: 'delete' },
       { re: /^(?:sposta|cambia|modifica|aggiorna|correggi)\s+/i, verb: 'edit' },
+      { re: /(?:sposta|cambia)\s+.*\s+(?:a|al?)\s+/i, verb: 'move' },
       { re: /^(?:annulla|no,?\s*(?:aspetta|scusa)|(?:no,?\s+)?(?:erano|era|non)\s+\d)/i, verb: 'correct' },
     ]
-    const editMatch = editPatterns.find(p => p.re.test(lower.trim()))
+    // "move" overrides "edit" if both match (more specific)
+    let editMatch = null
+    for (const p of editPatterns) {
+      if (p.re.test(lower.trim())) {
+        if (!editMatch || p.verb === 'move') editMatch = p
+      }
+    }
     if (editMatch) {
-      // Detect which entity type is referenced
+      // Detect target type (no expense in MVP — no findExpenses yet)
       const targetType =
         /\b(?:task|compito|attività)\b/i.test(lower) ? 'task' :
-        /\b(?:evento|appuntamento|dentista|danza|nuoto|scuola|calendario)\b/i.test(lower) ? 'calendar' :
-        /\b(?:spesa|euro|€|pagamento)\b/i.test(lower) ? 'expense' :
-        /\b(?:lista|shopping|comprare|spesa)\b/i.test(lower) ? 'shopping' :
+        /\b(?:evento|appuntamento|dentista|danza|nuoto|scuola|calendario|visita|lezione)\b/i.test(lower) ? 'calendar' :
+        /\b(?:lista|shopping|comprare)\b/i.test(lower) ? 'shopping' :
         'unknown'
 
+      // Extract search hints from the sentence
+      const activity = sentActivity || lastContext.activity || extractActivity(sentence)
+      const titleHintRaw = activity
+        ? activity.toLowerCase()
+        : lower.replace(editMatch.re, '').replace(/\b(?:di|del|della|dello|il|la|lo|l'|un|una|dei|delle|degli)\b/gi, '').trim().split(/\s+/)[0] || null
+
+      // Extract person from sentence
+      const personMatch = persons.length > 0 ? persons[0] : null
+
+      // Extract patch for move/edit verbs
+      let patch = null
+      if (editMatch.verb === 'move' || editMatch.verb === 'edit') {
+        const moveToMatch = lower.match(/\b(?:a|al?|per)\s+(.+)$/i)
+        if (moveToMatch) {
+          const patchDateRaw = moveToMatch[1].trim()
+          const patchDateNorm = parseLocalDate(patchDateRaw)
+          const patchTime = parseLocalTime(patchDateRaw)
+          patch = {
+            dateHintRaw: patchDateRaw,
+            dateNorm: patchDateNorm,
+            timeHint: patchTime,
+          }
+        }
+      }
+
       const editAction = {
-        type: 'edit_request',
+        type: 'edit_action',
         verb: editMatch.verb,
         targetType,
-        title: sentence.trim(),
-        text: sentence.trim(),
-        date,
-        hint: editMatch.verb === 'delete'
-          ? `Per eliminare, vai nella sezione ${targetType === 'calendar' ? 'Calendario' : targetType === 'task' ? 'Task' : targetType === 'expense' ? 'Spese' : 'corrispondente'}`
-          : editMatch.verb === 'correct'
-          ? 'Per correggere, modifica direttamente dalla lista'
-          : `Per modificare, vai nella sezione corrispondente`,
+        search: {
+          titleHintRaw: titleHintRaw,
+          titleHintNorm: titleHintRaw ? titleHintRaw.toLowerCase() : null,
+          dateHintRaw: lower.match(/\b(?:oggi|domani|dopodomani|luned[iì]|marted[iì]|mercoled[iì]|gioved[iì]|venerd[iì]|sabato|domenica|settimana\s+prossima|[\d]+\s+\w+)\b/i)?.[0] || null,
+          dateNorm: date,
+          personNameRaw: personMatch?.name || null,
+          personId: personMatch?.id || null,
+          activityHint: activity || null,
+        },
+        patch,
+        resolved: null,
+        _confidence: 0.80,
+        _pipelinePath: 'l0_edit',
+        _textOriginal: sentence,
       }
       actions.push(editAction)
       totalConfidence += 0.80
 
       if (debug) {
         addSentenceTrace(debugTrace, {
-          sentence, intent: 'edit_request', confidence: 0.80, source: 'l0_edit',
+          sentence, intent: 'edit_action', confidence: 0.80, source: 'l0_edit',
           people: persons.map(p => p.name), date, time,
-          actionsGenerated: [editAction], warnings: ['edit_not_executable'],
+          actionsGenerated: [editAction], warnings: [],
         })
       }
       continue
