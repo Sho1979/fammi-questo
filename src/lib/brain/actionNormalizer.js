@@ -17,7 +17,7 @@
  */
 
 import {
-  generateUtteranceRef, generateActionRef,
+  generateUtteranceRef, generateActionRef, createActionBase,
   createCalendarAction, createTaskAction, createExpenseAction,
   createMealAction, createShoppingAction, createReminderAction,
   createNoteAction, createLogisticsShape, createLinkedEntity,
@@ -98,7 +98,8 @@ function normalizeAction(raw, ctx, index) {
     case 'shopping': return normalizeShopping(raw, ctx, index)
     case 'reminder': return normalizeReminder(raw, ctx, index)
     case 'note':     return normalizeNote(raw, ctx, index)
-    case 'edit_request': return normalizeNote({ ...raw, type: 'note', text: raw.hint || raw.title || '' }, ctx, index)
+    case 'edit_action': return normalizeEditAction(raw, ctx, index)
+    case 'edit_request': return normalizeEditAction(raw, ctx, index) // legacy fallback
     default:
       // Tipo sconosciuto → converti in note
       console.warn(`[ActionNormalizer] Tipo sconosciuto "${type}", converto in note`)
@@ -312,6 +313,29 @@ function normalizeNote(raw, ctx, index) {
   action.text = raw.text || raw.title || ''
 
   return action
+}
+
+function normalizeEditAction(raw, ctx, index) {
+  // edit_action is a special pass-through type.
+  // It carries search{} and patch{} for the resolver, not DB fields.
+  const base = createActionBase('edit_action', ctx, index)
+
+  base.source = ctx.source || raw._source || 'L0'
+  base.confidence = typeof raw._confidence === 'number' ? raw._confidence : 0.80
+  base.textOriginal = raw._textOriginal || raw.textOriginal || ctx.textOriginal || ''
+  base.familyId = ctx.familyId || ''
+  base.createdBy = ctx.currentMemberId || null
+  base.meta.utteranceRef = ctx.utteranceRef
+  base.meta.actionRef = generateActionRef(index)
+  base.meta.pipelinePath = raw._pipelinePath || 'l0_edit'
+
+  base.verb = raw.verb || 'edit'
+  base.targetType = raw.targetType || 'unknown'
+  base.search = raw.search || {}
+  base.patch = raw.patch || null
+  base.resolved = raw.resolved || null
+
+  return base
 }
 
 // ═══════════════════════════════════════════════════════════════

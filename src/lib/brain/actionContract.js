@@ -20,7 +20,7 @@
 
 /** @type {readonly string[]} */
 export const ACTION_TYPES = Object.freeze([
-  'calendar', 'task', 'expense', 'meal', 'shopping', 'reminder', 'note',
+  'calendar', 'task', 'expense', 'meal', 'shopping', 'reminder', 'note', 'edit_action',
 ])
 
 /** @type {readonly string[]} */

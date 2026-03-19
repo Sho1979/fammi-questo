@@ -105,6 +105,9 @@ export function validateAction(action) {
       case 'note':
         validateNote(action, errors, warnings)
         break
+      case 'edit_action':
+        validateEditAction(action, errors, warnings)
+        break
     }
   }
 
@@ -349,6 +352,15 @@ function validateReminder(a, errors, warnings) {
 function validateNote(a, errors, warnings) {
   if (typeof a.text !== 'string') {
     errors.push('note: text must be string')
+  }
+}
+
+function validateEditAction(a, errors, warnings) {
+  if (!['delete', 'edit', 'move', 'correct'].includes(a.verb)) {
+    errors.push(`edit_action: verb non valido "${a.verb}"`)
+  }
+  if (!a.search || typeof a.search !== 'object') {
+    errors.push('edit_action: search mancante')
   }
 }
 
