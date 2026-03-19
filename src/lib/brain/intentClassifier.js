@@ -83,6 +83,8 @@ function resolveKeywordCategory(sentence, currentCategory) {
  * @param {object} [debugTrace] - Se fornito, raccoglie dati debug per ogni frase
  */
 export async function parseLocally(text, members = [], familyId = null, currentMember = null, debugTrace = null) {
+  // Check if original text is a question BEFORE splitSentences strips "?"
+  const _isOriginalQuestion = /\?\s*$/.test(text.trim())
   const sentences = splitSentences(text)
   const actions = []
   let totalConfidence = 0
@@ -229,6 +231,29 @@ export async function parseLocally(text, members = [], familyId = null, currentM
         })
       }
       continue
+    }
+
+    // ─── HEDGING / QUESTION / POSTPONE FILTER ───
+    // Frasi con "forse", "magari", domande, "devo pensarci" non sono azionabili.
+    // Il parser non deve creare record per ipotesi o domande consultive.
+    // Eccezione: importi espliciti ("forse ho speso 30 euro") e edit ("cancella X?")
+    const isEditStart = /^(?:cancella|elimina|rimuovi|togli|sposta|cambia|modifica|annulla)\b/i.test(lower.trim())
+    if (!isEditStart && amount === null) {
+      const isHedging = /\b(?:forse|magari|probabilmente|credo che|mi sa che)\b/i.test(lower)
+      const isQuestion = /\?\s*$/.test(sentence.trim()) || (_isOriginalQuestion && sentences.length === 1)
+      const isPostpone = /\b(?:devo pensarci|ci penso|poi vediamo|ti dico dopo|non so se|boh|mah)\b/i.test(lower)
+      const isConditional = /\b(?:se riesco|se posso|se ce la faccio|nel caso)\b/i.test(lower)
+
+      if (isHedging || isQuestion || isPostpone || isConditional) {
+        if (debug) {
+          addSentenceTrace(debugTrace, {
+            sentence, intent: 'hedging', confidence: 0, source: 'hedging_filter',
+            people: persons.map(p => p.name), date, time, amount: null,
+            warnings: [isHedging ? 'hedging' : isQuestion ? 'question' : isPostpone ? 'postpone' : 'conditional'],
+          })
+        }
+        continue
+      }
     }
 
     // ─── L0-EDIT: Frasi di modifica/cancellazione → edit_action con search/patch ───
