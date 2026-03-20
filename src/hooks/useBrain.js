@@ -25,7 +25,8 @@ import { notifyCluster } from './useNotifications.js'
 import { brainParse, learnFromConfirmed, learnFromRejected, applyDecay } from '../lib/brain/index.js'
 import { resolveEditAction } from '../lib/brain/dbResolver.js'
 import { initNlp, retrain, isNlpReady } from '../lib/brainNlp.js'
-import { expireOldDrafts } from '../lib/brain/conversationMemory.js'
+import { expireOldDrafts, createDraft } from '../lib/brain/conversationMemory.js'
+import { canWrite } from '../lib/brain/commitEvaluator.js'
 import { addExpense } from './useExpenses.js'
 import { addEvent, deleteEvent, updateEvent } from './useCalendar.js'
 import { addTask, deleteTask, updateTask } from './useTasks.js'
@@ -299,16 +300,38 @@ export default function useBrain() {
 
     for (const action of independent) {
       try {
+        const writeCheck = canWrite(action)
+
+        // Block: do not persist anywhere
+        if (writeCheck.target === 'block') {
+          console.warn('[Brain] Action blocked:', action.type, writeCheck.reasons)
+          log.push({ ok: false, target: 'block', msg: `Bloccato: ${writeCheck.reasons.join(', ')}`, type: action.type })
+          continue
+        }
+
+        // Draft: route to conversationDrafts
+        if (writeCheck.target === 'draft') {
+          await createDraft({
+            familyId,
+            createdBy: currentMember?.id,
+            intent: action.type,
+            entities: action,
+            parseResult: { actions: [action], confidence: action.confidence },
+            inputText: action.textOriginal,
+          })
+          log.push({ ok: true, target: 'draft', msg: `Salvato come bozza: ${action.title || action.type}`, type: action.type })
+          continue
+        }
+
+        // Strong or Light: proceed with normal DB write
         console.log('[Brain] Executing independent action:', action.type, action.title || action.text || '')
         const result = await executeAction(action)
         if (result) {
-          log.push({ ok: true, msg: result.msg, type: action.type })
-          // Cattura realId per risolvere tempRef nelle azioni dipendenti
+          log.push({ ok: true, target: writeCheck.target, msg: result.msg, type: action.type })
           if (result.record?.id && action.meta?.actionRef) {
             refToIdMap.set(action.meta.actionRef, result.record.id)
           }
         } else {
-          // executeAction returned null — tipo non gestito o azione vuota
           console.warn('[Brain] executeAction returned null for:', action.type, action)
           log.push({ ok: false, msg: `${action.type}: tipo non riconosciuto`, type: action.type })
         }
@@ -320,25 +343,47 @@ export default function useBrain() {
 
     // Fase 2: azioni dipendenti — risolvi tempRef → realId, poi persisti
     for (const action of dependent) {
+      // Resolve linked entity reference first (regardless of write check)
       if (action.linkedEntity?.tempRef) {
         const realId = refToIdMap.get(action.linkedEntity.tempRef)
         if (realId) {
           action.linkedEntity.realId = realId
         } else {
-          // Policy #3: padre non trovato → persisti senza link, log warning
           console.warn(`[Brain] tempRef "${action.linkedEntity.tempRef}" non risolto — padre non persistito o non trovato`)
         }
       }
+
       try {
+        const writeCheck = canWrite(action)
+
+        if (writeCheck.target === 'block') {
+          console.warn('[Brain] Dependent action blocked:', action.type, writeCheck.reasons)
+          log.push({ ok: false, target: 'block', msg: `Bloccato: ${writeCheck.reasons.join(', ')}`, type: action.type, linked: false })
+          continue
+        }
+
+        if (writeCheck.target === 'draft') {
+          await createDraft({
+            familyId,
+            createdBy: currentMember?.id,
+            intent: action.type,
+            entities: action,
+            parseResult: { actions: [action], confidence: action.confidence },
+            inputText: action.textOriginal,
+          })
+          log.push({ ok: true, target: 'draft', msg: `Salvato come bozza: ${action.title || action.type}`, type: action.type, linked: false })
+          continue
+        }
+
+        // Strong or Light: proceed with normal DB write
         console.log('[Brain] Executing dependent action:', action.type, action.title || action.text || '')
         const result = await executeAction(action)
         if (result) {
-          // Register dependent action in refToIdMap for entity graph relations
           if (result.record?.id && action.meta?.actionRef) {
             refToIdMap.set(action.meta.actionRef, result.record.id)
           }
           const linked = !!action.linkedEntity?.realId
-          log.push({ ok: true, msg: result.msg, type: action.type, linked })
+          log.push({ ok: true, target: writeCheck.target, msg: result.msg, type: action.type, linked })
           if (!linked && action.linkedEntity) {
             log.push({ ok: true, msg: `⚠ ${action.type}: collegamento non risolto`, type: action.type, linked: false })
           }
