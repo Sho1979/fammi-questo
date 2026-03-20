@@ -201,6 +201,8 @@ export async function executePhrase(scenarioTruth, members, familyId, currentMem
     scenarioTruth.actual.intent = firstAction?.type || 'none'
     scenarioTruth.actual.confidence = result?.confidence ?? 0
     scenarioTruth.actual.actionCount = actions.length
+    // Commit evaluation data (from commitEvaluator, if present)
+    scenarioTruth.actual.actions = actions
 
     // Check for absence (special sub-type)
     const hasAbsence = actions.some(

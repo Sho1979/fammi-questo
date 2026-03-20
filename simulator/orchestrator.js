@@ -388,6 +388,11 @@ export async function runOrchestrated(familyId, members, agents, db, config = {}
           errorCause: result.errorCause,
           // Resolver (edit_action only)
           resolverStatus: result.actual?.resolverStatus || null,
+          // Commit evaluation
+          commitLevel: result.actual?.actions?.[0]?.commit?.level || null,
+          writePolicy: result.actual?.actions?.[0]?.commit?.writePolicy || null,
+          commitReasonCodes: result.actual?.actions?.[0]?.commit?.reasonCodes || [],
+          previewType: result.actual?.actions?.[0]?.commit?.previewType || null,
         }
 
         trajectories.push(trajectory)

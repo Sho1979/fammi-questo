@@ -54,6 +54,16 @@ function buildPipelineAccuracy(trajectories) {
     if (t.recordQuality?.valid) perTable[table].qualityValid++
   }
 
+  // Commit level distribution
+  const commitLevels = { strong: 0, light: 0, draft: 0, none: 0, missing: 0 }
+  for (const t of trajectories) {
+    if (t.commitLevel) {
+      commitLevels[t.commitLevel] = (commitLevels[t.commitLevel] || 0) + 1
+    } else {
+      commitLevels.missing++
+    }
+  }
+
   return {
     total,
     intentAccuracy: round(safeDivide(intentCorrect, total)),
@@ -61,6 +71,7 @@ function buildPipelineAccuracy(trajectories) {
     writeRate,
     qualityRate: round(safeDivide(qualityValid, recordWritten || 1)),
     perTable,
+    commitLevelDistribution: commitLevels,
   }
 }
 
@@ -296,6 +307,10 @@ function printOrchestratorReport(report) {
   lines.push(`  Table accuracy:   ${pct(s1.tableAccuracy)}`)
   lines.push(`  Write rate:       ${pct(s1.writeRate)} (of expected writable)`)
   lines.push(`  Quality rate:     ${pct(s1.qualityRate)} (valid records / written)`)
+  if (s1.commitLevelDistribution) {
+    const cl = s1.commitLevelDistribution
+    lines.push(`  Commit levels:    strong=${cl.strong} light=${cl.light} draft=${cl.draft} none=${cl.none} missing=${cl.missing}`)
+  }
   lines.push('')
   lines.push('  Per table:')
   for (const [table, data] of Object.entries(s1.perTable)) {
