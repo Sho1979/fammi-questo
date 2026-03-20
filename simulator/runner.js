@@ -7,7 +7,7 @@
  *   3. Run multi-week simulation
  *   4. Generate and save report
  *
- * Usage: node runner.js [--weeks=8] [--dry] [--start=2025-09-01]
+ * Usage: node runner.js [--weeks=8] [--dry] [--start=2025-09-01] [--orchestrate]
  *
  * @module simulator/runner
  */
@@ -23,6 +23,7 @@ function parseCLIArgs() {
   let weeks = 8;
   let dryRun = false;
   let startDate = '2025-09-01';
+  let orchestrate = false;
 
   for (const arg of args) {
     if (arg.startsWith('--weeks=')) {
@@ -30,6 +31,8 @@ function parseCLIArgs() {
       if (!Number.isNaN(val) && val > 0) weeks = val;
     } else if (arg === '--dry') {
       dryRun = true;
+    } else if (arg === '--orchestrate') {
+      orchestrate = true;
     } else if (arg.startsWith('--start=')) {
       const val = arg.split('=')[1];
       // Basic ISO date validation
@@ -37,14 +40,14 @@ function parseCLIArgs() {
     }
   }
 
-  return { weeks, dryRun, startDate };
+  return { weeks, dryRun, startDate, orchestrate };
 }
 
 // ─── MAIN ───────────────────────────────────────────────────────
 
 async function main() {
   const t0 = Date.now();
-  const { weeks, dryRun, startDate } = parseCLIArgs();
+  const { weeks, dryRun, startDate, orchestrate } = parseCLIArgs();
 
   // ── 1. Banner ─────────────────────────────────────────────────
 
@@ -52,7 +55,7 @@ async function main() {
   console.log('');
   console.log(SEP);
   console.log('  FAMMI QUESTO -- Family Life Simulator');
-  console.log(`  Weeks: ${weeks} | Start: ${startDate}`);
+  console.log(`  Weeks: ${weeks} | Start: ${startDate}${orchestrate ? ' | ORCHESTRATE' : ''}`);
 
   // ── 2. Setup (imports polyfills first) ────────────────────────
 
@@ -63,38 +66,50 @@ async function main() {
 
   const { AGENTS } = await import('./agents/index.js');
 
-  console.log(`  Agents: ${AGENTS.length} | Mode: ${dryRun ? 'DRY RUN' : 'LIVE'}`);
+  const mode = orchestrate ? 'ORCHESTRATE' : dryRun ? 'DRY RUN' : 'LIVE';
+  console.log(`  Agents: ${AGENTS.length} | Mode: ${mode}`);
   console.log(SEP);
   console.log('');
 
-  // ── 4. Import engine ──────────────────────────────────────────
+  if (orchestrate) {
+    // ── ORCHESTRATE MODE: full trajectory tracing ───────────────
 
-  const { runSimulation } = await import('./engine/weekLoop.js');
+    const { runOrchestrated } = await import('./orchestrator.js');
+    const { generateOrchestratorReport } = await import('./orchestrator-report.js');
 
-  // ── 5. Run simulation ─────────────────────────────────────────
+    console.log(`[Runner] Starting ORCHESTRATED simulation: ${weeks} weeks from ${startDate}...`);
 
-  console.log(`[Runner] Starting simulation: ${weeks} weeks from ${startDate}...`);
+    const { trajectories, weeklyStats, worldState } = await runOrchestrated(
+      familyId, members, AGENTS, db,
+      { weeks, startDate },
+    );
 
-  const { allResults, weeklyStats, worldState } = await runSimulation(
-    familyId,
-    members,
-    AGENTS,
-    db,
-    { weeks, startDate, dryRun },
-  );
+    console.log(`[Runner] Orchestrated simulation finished. ${trajectories.length} trajectories captured.`);
 
-  console.log(`[Runner] Simulation finished. ${allResults.length} total phrases generated.`);
+    await generateOrchestratorReport(trajectories, weeklyStats);
 
-  // ── 6. Generate report ────────────────────────────────────────
+    const elapsed = Date.now() - t0;
+    console.log(`Orchestrator complete in ${elapsed}ms. Reports saved to orchestrator-output.json + trajectories.json`);
+  } else {
+    // ── STANDARD MODE: basic simulation + report ────────────────
 
-  const { generateReport } = await import('./report.js');
+    const { runSimulation } = await import('./engine/weekLoop.js');
 
-  const report = await generateReport(allResults, weeklyStats, worldState, db, familyId);
+    console.log(`[Runner] Starting simulation: ${weeks} weeks from ${startDate}...`);
 
-  // ── 7. Done ───────────────────────────────────────────────────
+    const { allResults, weeklyStats, worldState } = await runSimulation(
+      familyId, members, AGENTS, db,
+      { weeks, startDate, dryRun },
+    );
 
-  const elapsed = Date.now() - t0;
-  console.log(`Simulation complete in ${elapsed}ms. Report saved to report-output.json`);
+    console.log(`[Runner] Simulation finished. ${allResults.length} total phrases generated.`);
+
+    const { generateReport } = await import('./report.js');
+    await generateReport(allResults, weeklyStats, worldState, db, familyId);
+
+    const elapsed = Date.now() - t0;
+    console.log(`Simulation complete in ${elapsed}ms. Report saved to report-output.json`);
+  }
 
   process.exit(0);
 }
