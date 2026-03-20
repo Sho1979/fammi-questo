@@ -156,7 +156,10 @@ function validateCalendar(a, errors, warnings) {
   }
 
   if (!a.date || typeof a.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(a.date)) {
-    errors.push('calendar: date is required (YYYY-MM-DD)')
+    // C1: date-less calendar actions are allowed through to the commit evaluator.
+    // They get a warning (not error) so the evaluator can route them to draft_only.
+    // Expense and meal date requirements remain hard errors in their own validators.
+    warnings.push('calendar: date missing (will be evaluated by commit policy)')
   }
 
   // timeStart: null o HH:MM
