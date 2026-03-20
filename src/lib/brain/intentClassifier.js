@@ -652,7 +652,7 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     // ─── L0b3: Pattern "facciamo/ordiniamo + piatto" o "a pranzo pasta" → meal ───
     const PIATTI = 'pasta|pizza|risotto|lasagn[ea]|gnocchi|polpette|arrosto|grigliata|grigliatina|frittata|insalata|pollo|pesce|carne|sushi|carbonara|minestrone|minestra|zuppa|vellutata|parmigiana|tortellini|ravioli|tagliatelle|penne|spaghetti|hamburger|crepes|focaccia|piadina|riso|torta|pancake|cornetti|polenta|brodo|ragù|ragu|sugo|cotoletta'
     const mealDirectPatterns = [
-      new RegExp(`(?:facciamo|cuciniamo|prepariamo|ordiniamo)\\s+(?:le?\\s+|il\\s+|la\\s+|i\\s+|gli\\s+|un[oa]?\\s+)?(?:${PIATTI})`, 'i'),
+      new RegExp(`(?:facciamo|cuciniamo|prepariamo|preparo|ordiniamo|cucino)\\s+(?:le?\\s+|il\\s+|la\\s+|i\\s+|gli\\s+|un[oa]?\\s+)?(?:${PIATTI})`, 'i'),
       /(?:grigliat[ai]na?|barbecue|bbq)\s+(?:in\s+|al\s+|a\s+)/i,
       /(?:a\s+pranzo|a\s+cena)\s+(?:facciamo|prepariamo|cuciniamo)\s+/i,
       // "cucina Chiara che io lavoro" — assegnazione cucina a qualcuno
@@ -666,6 +666,12 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       /(?:pizza|sushi|cinese|giapponese|kebab|poke)\s+(?:da\s+asporto|a\s+domicilio|delivery)/i,
       // "colazione con + cibo"
       new RegExp(`(?:colazione|merenda)\\s+con\\s+(?:i\\s+|le?\\s+|il\\s+)?(?:${PIATTI}|cornetti|pancake|biscotti|yogurt|cereali|latte|succo)`, 'i'),
+      // "pensavo di fare + piatto" → meal proposal
+      new RegExp(`(?:pensavo|penso)\\s+di\\s+(?:fare|preparare|cucinare)\\s+(?:le?\\s+|il\\s+|la\\s+|i\\s+|gli\\s+|un[oa]?\\s+)?(?:${PIATTI})`, 'i'),
+      // "domenica/per domenica preparo + piatto" → meal planning (not task)
+      new RegExp(`(?:domenica|sabato|per\\s+(?:domenica|sabato|domani))\\s+(?:preparo|cucino|faccio)\\s+(?:le?\\s+|il\\s+|la\\s+|i\\s+|gli\\s+|un[oa]?\\s+)?(?:${PIATTI})`, 'i'),
+      // "vi porto il ragù" → meal contribution (not logistics)
+      new RegExp(`(?:vi\\s+porto|porto\\s+io)\\s+(?:il\\s+|la\\s+|le\\s+|i\\s+|lo\\s+)?(?:${PIATTI})`, 'i'),
     ]
     const isDirectMeal = mealDirectPatterns.some(re => re.test(lower))
     if (isDirectMeal) {
