@@ -717,6 +717,39 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       continue
     }
 
+    // ─── L0b4c: Pattern eventi sociali/personali brevi ───
+    // "vado a dormire da Emma", "sabato ho catechismo", "vado al supermercato"
+    // Frasi con giorno esplicito + attività/luogo sociale → calendar
+    const socialPersonalPatterns = [
+      // "vado a dormire da X" — sleepover
+      /\bvado\s+a\s+dormire\s+(?:da|a\s+casa\s+di)\s+/i,
+      // "vado a/al/alla + luogo" con giorno esplicito
+      /\bvado\s+(?:al|alla|all['']\s*|a)\s+\w+/i,
+      // "ho + attività nota" — impegno personale
+      /\bho\s+(?:catechismo|danza|nuoto|pallavolo|basket|calcio|tennis|karate|palestra|allenamento|lezione|partita|gara|saggio|recita|corso|la\s+verifica|l['']\s*esame|il\s+torneo)\b/i,
+      // "andiamo a/al/da" — uscita di gruppo
+      /\bandiamo\s+(?:al?|da[li]?|in)\s+/i,
+    ]
+    const isSocialPersonal = socialPersonalPatterns.some(re => re.test(lower))
+    const hasDateContext = date !== todayStrEarly || /\b(?:domani|dopodomani|luned[iì]|marted[iì]|mercoled[iì]|gioved[iì]|venerd[iì]|sabato|domenica)\b/i.test(lower)
+    if (isSocialPersonal && hasDateContext && amount === null) {
+      const action = buildAction('calendar', sentence, {
+        amount: null, date, time, persons, members, logistics, timeCtx,
+        category: guessCategoryFromSynapses('calendar', tokens, stems, allSynapses) || 'personale',
+      })
+      actions.push(action)
+      totalConfidence += 0.75
+
+      if (debug) {
+        addSentenceTrace(debugTrace, {
+          sentence, intent: 'calendar', confidence: 0.75, source: 'l0_social_personal',
+          people: persons.map(p => p.name), date, time,
+          actionsGenerated: [action], warnings: sentenceWarnings,
+        })
+      }
+      continue
+    }
+
     // ─── L0b5: Pattern task esplicito — verbi azione domestica/compiti ───
     const TASK_VERBS = /\b(?:pulire|pulizie|lavare|stirare|stendere|apparecchiare|sparecchiare|riordinare|ordinare|svuotare|aspirare|spazzare|innaffiare|scongelare|buttare|cambiare|controllare|firmare|stampare|chiamare|mandare|confermare|rinnovare)\b/i
     const hasTaskVerb = TASK_VERBS.test(lower)
