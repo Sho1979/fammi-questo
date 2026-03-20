@@ -125,14 +125,80 @@ function evaluateLighterPath(action) {
   }
 }
 
-// ─── FULL RULE ENGINE (placeholder — Chunks 3-4 fill this) ────
+// ─── CALENDAR RULES (1-4 + sub-rules 1a/3a/3b) ───────────────
+
+function evaluateCalendar(action, ctx) {
+  const datePresent = hasDate(action)
+  const timePresent = hasTime(action)
+
+  // Rule 4: No temporal anchor at all → draft
+  if (!datePresent) {
+    return buildCommit('draft', 'draft_event', {
+      reasonCodes: [REASON_CODES.NO_TEMPORAL_CONTEXT],
+      missingFields: ['date', 'timeStart'],
+      uiBadges: ['Bozza — manca quando'],
+    })
+  }
+
+  // Date is present. Determine if subject is a minor.
+  const subjectId = action.logistics?.subjectId || action.personIds?.[0] || ctx.speakerId
+  const subjectMember = findMember(subjectId, ctx.members)
+  const subjectIsMinor = subjectMember ? isMinor(subjectMember.role) : false
+
+  const missingFields = []
+  const reasonCodes = []
+  const uiBadges = []
+
+  // Time check
+  if (!timePresent) {
+    missingFields.push('timeStart')
+    reasonCodes.push(REASON_CODES.PARTIAL_TEMPORAL_CONTEXT)
+  }
+
+  // Minor logistics check
+  if (subjectIsMinor) {
+    const fullLogistics = hasFullLogistics(action)
+
+    if (!fullLogistics) {
+      reasonCodes.push(REASON_CODES.MINOR_LOGISTICS_UNRESOLVED)
+      // Has some logistics but not complete (e.g. drop-off without pickup)
+      if (hasAnyLogistics(action)) {
+        reasonCodes.push(REASON_CODES.MISSING_PICKUP_PLAN)
+      }
+      uiBadges.push('Chi porta/riprende?')
+    }
+
+    // Rule 2: Minor + date + time + full logistics → strong
+    if (timePresent && fullLogistics) {
+      return buildCommit('strong', 'event', { reasonCodes, missingFields, uiBadges })
+    }
+
+    // Rule 3/3a/3b: Minor with incomplete info → light
+    return buildCommit('light', 'event', { reasonCodes, missingFields, uiBadges })
+  }
+
+  // Adult path
+  // Rule 1: Adult + date + time → strong
+  if (timePresent) {
+    return buildCommit('strong', 'event', { reasonCodes, missingFields, uiBadges })
+  }
+
+  // Rule 1a: Adult + date, no time → light
+  return buildCommit('light', 'event', { reasonCodes, missingFields, uiBadges })
+}
+
+// ─── FULL RULE ENGINE ─────────────────────────────────────────
 
 function evaluateFullRules(action, ctx) {
-  // Will be implemented in Chunks 3-4
-  // Default: commit_light with UNKNOWN_TYPE_DEFAULTED
-  return buildCommit('light', action.type || 'unresolved', {
-    reasonCodes: [REASON_CODES.UNKNOWN_TYPE_DEFAULTED],
-  })
+  switch (action.type) {
+    case 'calendar':
+      return evaluateCalendar(action, ctx)
+    // Task, expense, meal, shopping — Chunk 4
+    default:
+      return buildCommit('light', action.type || 'unresolved', {
+        reasonCodes: [REASON_CODES.UNKNOWN_TYPE_DEFAULTED],
+      })
+  }
 }
 
 // ─── PUBLIC API ────────────────────────────────────────────────

@@ -236,6 +236,234 @@ describe('Commit Evaluator — Absence (lighter path)', () => {
   })
 })
 
+// ═══════════════════════════════════════════════════════════════
+// EVENT RULES (1-4 + sub-rules 1a/3a/3b)
+// ═══════════════════════════════════════════════════════════════
+
+describe('Commit Evaluator — Event Rules', () => {
+  const calendarBase = {
+    type: 'calendar',
+    personIds: [],
+    personNames: [],
+    location: null,
+    activity: null,
+    category: 'altro',
+    isAbsence: false,
+    logistics: null,
+    confidence: 0.88,
+    meta: baseMeta,
+  }
+
+  // ── Rule 1: Autonomous adult + date + time → strong ──
+  it('Rule 1: adult + date + time → commit_strong', () => {
+    const action = {
+      ...calendarBase,
+      title: 'Riunione ufficio',
+      date: '2026-03-21',
+      timeStart: '09:00',
+      timeEnd: null,
+      personIds: ['mem_cristian'],
+      personNames: ['Cristian'],
+      textOriginal: 'domani riunione alle 9',
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('strong')
+    expect(result.commit.writePolicy).toBe('commit_strong')
+    expect(result.commit.previewType).toBe('event')
+  })
+
+  // ── Rule 1a: Adult + date, no time → light + PARTIAL_TEMPORAL ──
+  it('Rule 1a: adult + date, no time → commit_light + PARTIAL_TEMPORAL_CONTEXT', () => {
+    const action = {
+      ...calendarBase,
+      title: 'Riunione ufficio',
+      date: '2026-03-21',
+      timeStart: null,
+      timeEnd: null,
+      personIds: ['mem_cristian'],
+      personNames: ['Cristian'],
+      textOriginal: 'domani riunione',
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('light')
+    expect(result.commit.writePolicy).toBe('commit_light')
+    expect(result.commit.previewType).toBe('event')
+    expect(result.commit.reasonCodes).toContain('PARTIAL_TEMPORAL_CONTEXT')
+    expect(result.commit.missingFields).toContain('timeStart')
+  })
+
+  // ── Rule 2: Minor + date + time + full logistics → strong ──
+  it('Rule 2: minor + date + time + full logistics → commit_strong', () => {
+    const action = {
+      ...calendarBase,
+      title: 'Danza Viola',
+      date: '2026-03-21',
+      timeStart: '17:00',
+      timeEnd: null,
+      personIds: ['mem_viola'],
+      personNames: ['Viola'],
+      activity: 'danza',
+      category: 'sport',
+      textOriginal: 'domani viola ha danza alle 17 la porto io e la riprende chiara',
+      logistics: {
+        subjectId: 'mem_viola',
+        subjectName: 'Viola',
+        accompaniedById: 'mem_cristian',
+        accompaniedByName: 'Cristian',
+        pickupById: 'mem_chiara',
+        pickupByName: 'Chiara',
+        actionVerb: 'portare',
+        needsDriver: true,
+      },
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('strong')
+    expect(result.commit.writePolicy).toBe('commit_strong')
+    expect(result.commit.previewType).toBe('event')
+  })
+
+  // ── Rule 3: Minor + date + time, incomplete logistics → light ──
+  it('Rule 3: minor + date + time, no logistics → commit_light + MINOR_LOGISTICS_UNRESOLVED', () => {
+    const action = {
+      ...calendarBase,
+      title: 'Danza Viola',
+      date: '2026-03-21',
+      timeStart: '17:30',
+      timeEnd: null,
+      personIds: ['mem_viola'],
+      personNames: ['Viola'],
+      activity: 'danza',
+      category: 'sport',
+      textOriginal: 'domani viola ha danza alle 17:30',
+      logistics: null,
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('light')
+    expect(result.commit.writePolicy).toBe('commit_light')
+    expect(result.commit.reasonCodes).toContain('MINOR_LOGISTICS_UNRESOLVED')
+  })
+
+  // ── Rule 3 variant: drop-off but no pickup → MISSING_PICKUP ──
+  it('Rule 3 variant: minor + drop-off only → MISSING_PICKUP_PLAN', () => {
+    const action = {
+      ...calendarBase,
+      title: 'Danza Viola',
+      date: '2026-03-21',
+      timeStart: '17:30',
+      timeEnd: null,
+      personIds: ['mem_viola'],
+      personNames: ['Viola'],
+      activity: 'danza',
+      category: 'sport',
+      textOriginal: 'porto viola a danza domani alle 17:30',
+      logistics: {
+        subjectId: 'mem_viola',
+        subjectName: 'Viola',
+        accompaniedById: 'mem_cristian',
+        accompaniedByName: 'Cristian',
+        pickupById: null,
+        pickupByName: null,
+        actionVerb: 'portare',
+        needsDriver: true,
+      },
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('light')
+    expect(result.commit.reasonCodes).toContain('MINOR_LOGISTICS_UNRESOLVED')
+    expect(result.commit.reasonCodes).toContain('MISSING_PICKUP_PLAN')
+  })
+
+  // ── Rule 3a: Minor + date, no time, no logistics ──
+  it('Rule 3a: minor + date, no time, no logistics → PARTIAL_TEMPORAL + MINOR_LOGISTICS', () => {
+    const action = {
+      ...calendarBase,
+      title: 'Catechismo Viola',
+      date: '2026-03-21',
+      timeStart: null,
+      timeEnd: null,
+      personIds: ['mem_viola'],
+      personNames: ['Viola'],
+      activity: 'catechismo',
+      textOriginal: 'domani viola ha catechismo',
+      logistics: null,
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('light')
+    expect(result.commit.reasonCodes).toContain('PARTIAL_TEMPORAL_CONTEXT')
+    expect(result.commit.reasonCodes).toContain('MINOR_LOGISTICS_UNRESOLVED')
+    expect(result.commit.missingFields).toContain('timeStart')
+  })
+
+  // ── Rule 3b: Minor + date, no time, WITH full logistics ──
+  it('Rule 3b: minor + date, no time, WITH full logistics → PARTIAL_TEMPORAL only', () => {
+    const action = {
+      ...calendarBase,
+      title: 'Catechismo Viola',
+      date: '2026-03-21',
+      timeStart: null,
+      timeEnd: null,
+      personIds: ['mem_viola'],
+      personNames: ['Viola'],
+      activity: 'catechismo',
+      textOriginal: 'domani viola ha catechismo la porto e la riprendo',
+      logistics: {
+        subjectId: 'mem_viola',
+        subjectName: 'Viola',
+        accompaniedById: 'mem_cristian',
+        accompaniedByName: 'Cristian',
+        pickupById: 'mem_cristian',
+        pickupByName: 'Cristian',
+        actionVerb: 'portare',
+        needsDriver: true,
+      },
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('light')
+    expect(result.commit.reasonCodes).toContain('PARTIAL_TEMPORAL_CONTEXT')
+    expect(result.commit.reasonCodes).not.toContain('MINOR_LOGISTICS_UNRESOLVED')
+    expect(result.commit.missingFields).toContain('timeStart')
+  })
+
+  // ── Rule 4: No temporal anchor → draft ──
+  // "ho catechismo" — the real phrase that started this whole design
+  it('Rule 4: "ho catechismo" (no date, no time) → draft_only + NO_TEMPORAL_CONTEXT', () => {
+    const action = {
+      ...calendarBase,
+      title: 'Catechismo',
+      date: null,
+      timeStart: null,
+      timeEnd: null,
+      personIds: ['mem_viola'],
+      personNames: ['Viola'],
+      activity: 'catechismo',
+      textOriginal: 'ho catechismo',
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('draft')
+    expect(result.commit.writePolicy).toBe('draft_only')
+    expect(result.commit.previewType).toBe('draft_event')
+    expect(result.commit.reasonCodes).toContain('NO_TEMPORAL_CONTEXT')
+    expect(result.commit.canConfirm).toBe(true) // draft is still confirmable
+  })
+
+  // ── Real phrase: "domani recita alle 17" (adult speaking about event) ──
+  it('Real phrase: "domani recita alle 17" → commit_strong (adult, date+time)', () => {
+    const action = {
+      ...calendarBase,
+      title: 'Recita',
+      date: '2026-03-21',
+      timeStart: '17:00',
+      timeEnd: null,
+      personIds: ['mem_cristian'],
+      personNames: ['Cristian'],
+      activity: 'recita',
+      textOriginal: 'domani recita alle 17',
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('strong')
+  })
+})
+
 describe('Commit Evaluator — Batch evaluation', () => {
   it('should evaluate multiple actions independently', () => {
     const actions = [
