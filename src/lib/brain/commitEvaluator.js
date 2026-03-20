@@ -336,3 +336,80 @@ export function evaluateSingleAction(action, ctx) {
 export function evaluateCommitPolicy(actions, ctx) {
   return actions.map(action => evaluateSingleAction(action, ctx))
 }
+
+// ─── WRITE GUARD ───────────────────────────────────────────────
+
+const POLICY_TARGET = {
+  commit_strong: 'strong',
+  commit_light: 'light',
+  draft_only: 'draft',
+  block: 'block',
+}
+
+/**
+ * Type-specific integrity checks for the write guard.
+ * Returns array of failure reasons (empty = OK).
+ */
+function checkTypeIntegrity(action) {
+  const reasons = []
+
+  switch (action.type) {
+    case 'calendar':
+      if (!hasDate(action)) {
+        reasons.push('calendar: date required for target table write')
+      }
+      break
+
+    case 'expense':
+      if (typeof action.amount !== 'number' || action.amount <= 0) {
+        reasons.push('expense: amount must be > 0')
+      }
+      break
+
+    // Tasks can be written without assignee (light), so no hard check here
+  }
+
+  return reasons
+}
+
+/** Patterns that indicate critical integrity failure → must degrade to draft */
+const CRITICAL_PATTERNS = ['date required', 'amount must be']
+
+/**
+ * Write guard — final safety check before DB write.
+ * Does NOT trust action.commit.canWrite. Recalculates from writePolicy + real field state.
+ *
+ * @param {Object} action - Canonical action with .commit attached
+ * @returns {{ target: 'strong'|'light'|'draft'|'block', reasons: string[] }}
+ */
+export function canWrite(action) {
+  // No commit evaluation → block (safety)
+  if (!action.commit) {
+    return { target: 'block', reasons: ['no commit evaluation found'] }
+  }
+
+  let target = POLICY_TARGET[action.commit.writePolicy] || 'block'
+  const reasons = []
+
+  // For strong/light writes, run type-specific integrity checks
+  if (target === 'strong' || target === 'light') {
+    const integrityIssues = checkTypeIntegrity(action)
+
+    if (integrityIssues.length > 0) {
+      reasons.push(...integrityIssues)
+
+      // Critical failures force degradation to draft
+      const criticalFailures = integrityIssues.filter(r =>
+        CRITICAL_PATTERNS.some(p => r.includes(p))
+      )
+
+      if (criticalFailures.length > 0) {
+        target = 'draft'  // critical integrity failure → can't write to target table
+      } else if (target === 'strong') {
+        target = 'light'  // non-critical → degrade to light
+      }
+    }
+  }
+
+  return { target, reasons }
+}

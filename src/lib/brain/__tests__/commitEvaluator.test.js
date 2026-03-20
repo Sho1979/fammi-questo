@@ -14,7 +14,7 @@
 import { describe, it, expect } from 'vitest'
 import { validateAction } from '../actionValidator.js'
 import { MEMORY_INTENTS } from '../conversationMemory.js'
-import { evaluateCommitPolicy, evaluateSingleAction, REASON_CODES } from '../commitEvaluator.js'
+import { evaluateCommitPolicy, evaluateSingleAction, canWrite, REASON_CODES } from '../commitEvaluator.js'
 
 // ═══════════════════════════════════════════════════════════════
 // SHARED TEST HELPERS
@@ -735,5 +735,85 @@ describe('Commit Evaluator — Batch evaluation', () => {
     expect(results[1].commit.level).toBe('strong')  // note
     expect(results[0].commit.reasonCodes).toContain('EVALUATED_POST_NORMALIZE')
     expect(results[1].commit.reasonCodes).toContain('EVALUATED_POST_NORMALIZE')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════
+// WRITE GUARD (canWrite)
+// ═══════════════════════════════════════════════════════════════
+
+describe('Commit Evaluator — Write Guard (canWrite)', () => {
+  it('should route commit_strong → target: strong', () => {
+    const action = {
+      type: 'calendar',
+      date: '2026-03-21',
+      timeStart: '09:00',
+      commit: { level: 'strong', writePolicy: 'commit_strong', canWrite: true },
+    }
+    const result = canWrite(action)
+    expect(result.target).toBe('strong')
+    expect(result.reasons).toEqual([])
+  })
+
+  it('should route commit_light → target: light', () => {
+    const action = {
+      type: 'calendar',
+      date: '2026-03-21',
+      timeStart: null,
+      commit: { level: 'light', writePolicy: 'commit_light', canWrite: true },
+    }
+    const result = canWrite(action)
+    expect(result.target).toBe('light')
+    expect(result.reasons).toEqual([])
+  })
+
+  it('should route draft_only → target: draft', () => {
+    const action = {
+      type: 'calendar',
+      date: null,
+      commit: { level: 'draft', writePolicy: 'draft_only', canWrite: false },
+    }
+    const result = canWrite(action)
+    expect(result.target).toBe('draft')
+    expect(result.reasons).toEqual([])
+  })
+
+  it('should route block → target: block', () => {
+    const action = {
+      type: 'task',
+      commit: { level: 'none', writePolicy: 'block', canWrite: false },
+    }
+    const result = canWrite(action)
+    expect(result.target).toBe('block')
+  })
+
+  it('should degrade commit_strong to draft if calendar has no date', () => {
+    const action = {
+      type: 'calendar',
+      date: null,
+      timeStart: '09:00',
+      commit: { level: 'strong', writePolicy: 'commit_strong', canWrite: true },
+    }
+    const result = canWrite(action)
+    expect(result.target).toBe('draft')
+    expect(result.reasons.length).toBeGreaterThan(0)
+  })
+
+  it('should degrade commit_strong to draft if expense has amount 0', () => {
+    const action = {
+      type: 'expense',
+      amount: 0,
+      commit: { level: 'strong', writePolicy: 'commit_strong', canWrite: true },
+    }
+    const result = canWrite(action)
+    expect(result.target).toBe('draft')
+    expect(result.reasons).toContain('expense: amount must be > 0')
+  })
+
+  it('should handle action without commit (no evaluator ran) → block', () => {
+    const action = { type: 'task', title: 'Something' }
+    const result = canWrite(action)
+    expect(result.target).toBe('block')
+    expect(result.reasons).toContain('no commit evaluation found')
   })
 })
