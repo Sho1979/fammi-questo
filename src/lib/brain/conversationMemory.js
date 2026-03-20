@@ -26,8 +26,8 @@ const DRAFT_TTL_MS = 15 * 60 * 1000       // 15 minuti
 const DRAFT_EXTEND_MS = 10 * 60 * 1000    // estendi di 10 min a ogni merge
 const MAX_DRAFT_AGE_MS = 30 * 60 * 1000   // max 30 minuti totali
 
-/** Intent supportati dalla memoria breve */
-const MEMORY_INTENTS = ['calendar', 'absence', 'expense']
+/** Intent supportati dalla memoria breve — all action types that can become drafts */
+export const MEMORY_INTENTS = ['calendar', 'absence', 'expense', 'task', 'reminder', 'shopping', 'meal', 'note']
 
 /** Campi minimi per intent (per decidere auto-commit) */
 const MIN_FIELDS = {

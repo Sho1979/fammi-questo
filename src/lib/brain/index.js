@@ -42,10 +42,8 @@ export { runMemoryTests, MEMORY_TEST_CASES } from './testMemory.js'
 export {
   getActiveDraft, createDraft, abandonDraft, commitDraft,
   buildDraftPreview, buildActionsFromDraft,
+  MEMORY_INTENTS,
 } from './conversationMemory.js'
-
-// Intent supportati dalla memoria breve
-const MEMORY_INTENTS = ['calendar', 'absence', 'expense']
 
 // ═══════════════════════════════════════════════════════════════
 // ORCHESTRATORE PRINCIPALE — 3 livelli + memoria conversazionale

@@ -13,6 +13,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { validateAction } from '../actionValidator.js'
+import { MEMORY_INTENTS } from '../conversationMemory.js'
 
 // ═══════════════════════════════════════════════════════════════
 // SHARED TEST HELPERS
@@ -103,5 +104,14 @@ describe('C1: Validator date relaxation for calendar', () => {
     const result = validateAction(action)
     expect(result.ok).toBe(true)
     expect(result.warnings).not.toContain('calendar: date missing (will be evaluated by commit policy)')
+  })
+})
+
+describe('C2: MEMORY_INTENTS expanded for all types', () => {
+  it('should include all action types that can be drafted', () => {
+    const requiredIntents = ['calendar', 'absence', 'expense', 'task', 'reminder', 'shopping', 'meal', 'note']
+    for (const intent of requiredIntents) {
+      expect(MEMORY_INTENTS, `MEMORY_INTENTS missing: ${intent}`).toContain(intent)
+    }
   })
 })
