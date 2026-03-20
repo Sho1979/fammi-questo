@@ -285,6 +285,64 @@ function buildProblemPhrases(trajectories) {
   }
 }
 
+// ─── SECTION 6: REASON CODE ANALYSIS ────────────────────────
+
+function buildReasonCodeAnalysis(trajectories) {
+  // Global reason code frequency
+  const codeFreq = {}
+  // Reason code per commit level
+  const codeByLevel = { strong: {}, light: {}, draft: {}, none: {} }
+  // Reason code per agent
+  const codeByAgent = {}
+  // Sample phrases per reason code (max 3)
+  const codeSamples = {}
+
+  for (const t of trajectories) {
+    const codes = t.commitReasonCodes || []
+    const level = t.commitLevel || 'missing'
+
+    for (const code of codes) {
+      if (code === 'EVALUATED_POST_NORMALIZE') continue // sentinel, skip
+
+      // Global
+      codeFreq[code] = (codeFreq[code] || 0) + 1
+
+      // Per level
+      if (codeByLevel[level]) {
+        codeByLevel[level][code] = (codeByLevel[level][code] || 0) + 1
+      }
+
+      // Per agent
+      const agent = t.agent || 'unknown'
+      if (!codeByAgent[agent]) codeByAgent[agent] = {}
+      codeByAgent[agent][code] = (codeByAgent[agent][code] || 0) + 1
+
+      // Samples
+      if (!codeSamples[code]) codeSamples[code] = []
+      if (codeSamples[code].length < 3) {
+        codeSamples[code].push({
+          text: (t.text || '').slice(0, 60),
+          agent: t.agent,
+          level,
+        })
+      }
+    }
+  }
+
+  // Sort by frequency
+  const ranked = Object.entries(codeFreq)
+    .sort((a, b) => b[1] - a[1])
+    .map(([code, count]) => ({ code, count, samples: codeSamples[code] || [] }))
+
+  return {
+    totalCodesEmitted: Object.values(codeFreq).reduce((s, v) => s + v, 0),
+    uniqueCodes: ranked.length,
+    ranked,
+    byLevel: codeByLevel,
+    byAgent: codeByAgent,
+  }
+}
+
 // ─── CONSOLE OUTPUT ────────────────────────────────────────────
 
 function printOrchestratorReport(report) {
@@ -378,6 +436,32 @@ function printOrchestratorReport(report) {
     }
   }
 
+  // Section 6: Reason Code Analysis
+  if (report.reasonCodeAnalysis) {
+    const s6 = report.reasonCodeAnalysis
+    lines.push('')
+    lines.push('▸ REASON CODE ANALYSIS')
+    lines.push(sep)
+    lines.push(`  Total codes emitted: ${s6.totalCodesEmitted} | Unique: ${s6.uniqueCodes}`)
+    lines.push('')
+    lines.push('  Top reason codes:')
+    for (const { code, count, samples } of s6.ranked.slice(0, 10)) {
+      lines.push(`    ${pad(code + ':', 36)} ${count}x`)
+      if (samples.length > 0) {
+        lines.push(`      e.g. "${samples[0].text}" [${samples[0].agent}, ${samples[0].level}]`)
+      }
+    }
+
+    // Per-level breakdown (only non-empty)
+    lines.push('')
+    lines.push('  By commit level:')
+    for (const [level, codes] of Object.entries(s6.byLevel)) {
+      const entries = Object.entries(codes).sort((a, b) => b[1] - a[1])
+      if (entries.length === 0) continue
+      lines.push(`    ${level}: ${entries.map(([c, n]) => `${c}(${n})`).join(', ')}`)
+    }
+  }
+
   lines.push('')
   lines.push(SEP)
   lines.push('')
@@ -402,9 +486,10 @@ export async function generateOrchestratorReport(trajectories, weeklyStats) {
   const roleViews = buildRoleViews(trajectories)
   const perAgentSummary = buildPerAgentSummary(trajectories)
   const problemPhrases = buildProblemPhrases(trajectories)
+  const reasonCodeAnalysis = buildReasonCodeAnalysis(trajectories)
 
   const report = {
-    version: 1,
+    version: 2,
     type: 'orchestrator',
     generatedAt: new Date().toISOString(),
     totalTrajectories: trajectories.length,
@@ -413,6 +498,7 @@ export async function generateOrchestratorReport(trajectories, weeklyStats) {
     roleViews,
     perAgentSummary,
     problemPhrases,
+    reasonCodeAnalysis,
     weeklyStats,
   }
 
