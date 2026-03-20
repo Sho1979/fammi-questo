@@ -732,7 +732,7 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       // "vado a/al/alla + luogo" con giorno esplicito
       /\bvado\s+(?:al|alla|all['']\s*|a)\s+\w+/i,
       // "ho + attività nota" — impegno personale
-      /\bho\s+(?:catechismo|danza|nuoto|pallavolo|basket|calcio|tennis|karate|palestra|allenamento|lezione|partita|gara|saggio|recita|corso|la\s+verifica|l['']\s*esame|il\s+torneo)\b/i,
+      /\bho\s+(?:catechismo|danza|nuoto|pallavolo|basket|calcio|tennis|karate|palestra|allenamento|lezione|partita|gara|saggio|recita|corso|il\s+torneo)\b/i,
       // "andiamo a/al/da" — uscita di gruppo
       /\bandiamo\s+(?:al?|da[li]?|in)\s+/i,
     ]
@@ -1082,7 +1082,7 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       finalCategory = nlpCategory || synCategory || 'altro'
       finalConfidence = Math.max(nlpScore, 0.85)
       decisionSource = 'structural+l1_nlp'
-    } else if (structuralCalendar && nlpType !== 'calendar' && nlpType !== 'expense') {
+    } else if (structuralCalendar && nlpType !== 'calendar' && nlpType !== 'expense' && nlpType !== 'task') {
       finalType = 'calendar'
       finalCategory = synCategory || nlpCategory || 'altro'
       finalConfidence = Math.max(synConfidence, 0.70)
