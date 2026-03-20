@@ -4,14 +4,14 @@
  * Scrollable horizontally on mobile, responsive layout.
  */
 import { useMemo, memo } from 'react'
-import { Plus, Clock, CheckCircle2, CalendarDays } from 'lucide-react'
+import { Plus, Clock, CheckCircle2, CalendarDays, Trash2 } from 'lucide-react'
 import { getWeekDays, formatDayShort, formatTime, isToday } from '../../lib/dates.js'
 import { EVENT_CATEGORIES, TASK_CATEGORIES } from '../../lib/constants.js'
 
 const CAL_COLOR = '#0984E3'
 const TASK_COLOR = '#A855F7'
 
-function MiniEventCard({ event, members }) {
+function MiniEventCard({ event, members, onDelete }) {
   const cat = EVENT_CATEGORIES.find((c) => c.id === event.category)
   const color = event.color || cat?.color || '#9E9E9E'
   const isAbsence = event.isAbsence || event.category === 'assenza'
@@ -30,11 +30,21 @@ function MiniEventCard({ event, members }) {
     >
       <div className="flex items-center gap-1">
         <span className="text-[10px]">{isAbsence ? '🚫' : (cat?.icon || '📌')}</span>
-        <span className="font-semibold truncate" style={{ color: isAbsence ? '#EF4444' : '#2D3436' }}>
+        <span className="font-semibold truncate flex-1" style={{ color: isAbsence ? '#EF4444' : '#2D3436' }}>
           {event.title}
         </span>
         {hasWarnings && (
           <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+        )}
+        {onDelete && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onDelete(event.id) }}
+            className="flex-shrink-0 rounded-full p-1 text-gray-300 hover:bg-red-50 hover:text-red-500 transition-colors"
+            aria-label="Elimina evento"
+          >
+            <Trash2 size={11} />
+          </button>
         )}
       </div>
       {event.time_start && (
@@ -191,7 +201,7 @@ export default memo(function WeekView({
             >
               {/* Events */}
               {dayEvts.map((ev) => (
-                <MiniEventCard key={ev.id} event={ev} members={members} />
+                <MiniEventCard key={ev.id} event={ev} members={members} onDelete={onDelete} />
               ))}
 
               {/* Tasks */}

@@ -3,7 +3,7 @@
  * Maximum detail level. Shows events positioned by time + all-day section + tasks.
  */
 import { useMemo } from 'react'
-import { Plus, Clock, CheckCircle2, CalendarDays, MapPin, AlertTriangle, Sun, Sunset } from 'lucide-react'
+import { Plus, Clock, CheckCircle2, CalendarDays, MapPin, AlertTriangle, Sun, Sunset, Trash2 } from 'lucide-react'
 import { formatDate, formatWeekday, formatTime } from '../../lib/dates.js'
 import { EVENT_CATEGORIES, LOGISTICS_ROLES, TASK_CATEGORIES } from '../../lib/constants.js'
 
@@ -46,11 +46,21 @@ function EventBlock({ event, members, onEdit, onDelete }) {
       {/* Header */}
       <div className="flex items-center gap-2">
         <span className="text-sm">{isAbsence ? '🚫' : (cat?.icon || '📌')}</span>
-        <h4 className="text-sm font-semibold truncate" style={{ color: isAbsence ? '#EF4444' : '#2D3436' }}>
+        <h4 className="text-sm font-semibold truncate flex-1" style={{ color: isAbsence ? '#EF4444' : '#2D3436' }}>
           {event.title}
         </h4>
         {hasWarnings && (
           <span className="flex-shrink-0 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+        )}
+        {onDelete && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onDelete(event.id) }}
+            className="flex-shrink-0 rounded-full p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500 transition-colors"
+            aria-label="Elimina evento"
+          >
+            <Trash2 size={14} />
+          </button>
         )}
       </div>
 

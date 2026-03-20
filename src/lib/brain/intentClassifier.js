@@ -1150,7 +1150,11 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     }
 
     // ─── Costruisci azione/i ───
-    const ctx = { amount, date, time, persons, members, logistics, timeCtx, category: finalCategory }
+    // Per calendar: se nessuna data esplicita nel testo, passa null
+    // così il commit evaluator può classificare come draft (NO_TEMPORAL_CONTEXT)
+    const hasExplicitDateForCtx = date !== todayStrEarly || /\b(?:oggi|domani|dopodomani|luned[iì]|marted[iì]|mercoled[iì]|gioved[iì]|venerd[iì]|sabato|domenica|stasera|stamattina|pomeriggio)\b/i.test(lower)
+    const calendarDate = (finalType === 'calendar' && !hasExplicitDateForCtx) ? null : date
+    const ctx = { amount, date: calendarDate, time, persons, members, logistics, timeCtx, category: finalCategory }
     const sentenceActions = []
 
     // DUAL ACTION: "X deve prendere/portare Y" → calendario per Y + task per X

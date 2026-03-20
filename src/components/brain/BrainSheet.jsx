@@ -206,6 +206,15 @@ function ActionCard({ action, index, onRemove }) {
             <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: config.color }}>
               {config.label}
             </span>
+            {action.commit?.level === 'draft' && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-bold">BOZZA</span>
+            )}
+            {action.commit?.level === 'none' && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-50 text-red-500 font-bold">INCOMPLETO</span>
+            )}
+            {action.commit?.level === 'light' && action.commit?.uiBadges?.length > 0 && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-orange-50 text-orange-500 font-medium">{action.commit.uiBadges[0]}</span>
+            )}
             {hasWarning && <AlertTriangle size={11} className="text-amber-500" />}
             {action.linkedEntity && (
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-500 font-medium">linked</span>
@@ -214,6 +223,12 @@ function ActionCard({ action, index, onRemove }) {
           <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
             {action.title || action.text || `€${action.amount}`}
           </p>
+          {action.commit?.level === 'draft' && (
+            <p className="text-[10px] text-amber-600">Salvata come bozza — mancano dati</p>
+          )}
+          {action.commit?.level === 'none' && (
+            <p className="text-[10px] text-red-500">Non salvabile — servono più dettagli</p>
+          )}
         </div>
 
         <button

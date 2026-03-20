@@ -229,7 +229,7 @@ function normalizeExpense(raw, ctx, index) {
   action.title = raw.note || raw.title || raw.textOriginal || ''
   action.amount = typeof raw.amount === 'number' ? raw.amount : parseFloat(raw.amount) || 0
   action.category = raw.category || null
-  action.date = normalizeDate(raw.date)
+  action.date = normalizeDateWithDefault(raw.date)
 
   // person → personId
   if (raw.person) {
@@ -250,7 +250,7 @@ function normalizeMeal(raw, ctx, index) {
   fillBase(action, raw, ctx, index)
 
   action.title = raw.name || raw.title || ''
-  action.date = normalizeDate(raw.date)
+  action.date = normalizeDateWithDefault(raw.date)
 
   // Normalizza slot: legacy 'cena'→'dinner', 'pranzo'→'lunch', 'colazione'→'breakfast'
   const slotMap = {
@@ -493,17 +493,26 @@ function resolveMember(nameOrAlias, members) {
 
 /**
  * Normalizza una data in formato YYYY-MM-DD.
- * Se non valida o mancante, ritorna la data di oggi.
+ * Se non valida o mancante, ritorna null (il commit evaluator deciderà il livello).
+ * Per i tipi che richiedono una data di default, usare normalizeDateWithDefault().
  */
 function normalizeDate(dateStr) {
-  if (!dateStr) return new Date().toISOString().slice(0, 10)
+  if (!dateStr) return null
   if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
   // Prova a parsare
   try {
     const d = new Date(dateStr)
     if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10)
   } catch { /* ignore */ }
-  return new Date().toISOString().slice(0, 10)
+  return null
+}
+
+/**
+ * Normalizza una data, con fallback a oggi se mancante.
+ * Usare per tipi che DEVONO avere una data (expense, meal, task).
+ */
+function normalizeDateWithDefault(dateStr) {
+  return normalizeDate(dateStr) || new Date().toISOString().slice(0, 10)
 }
 
 /**
