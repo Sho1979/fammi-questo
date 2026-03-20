@@ -32,6 +32,7 @@ import { getTimeContext, computeSynapseActivations } from './synapseEngine.js'
 import { buildAction, guessCategoryFromSynapses } from './actionBuilder.js'
 import { addSentenceTrace, isDebugEnabled } from './debugLogger.js'
 import { normalizeAndValidateActions } from './actionNormalizer.js'
+import { evaluateCommitPolicy } from './commitEvaluator.js'
 
 // ---------------------------------------------------------------
 // KEYWORD CATEGORY RESOLVER � override categoria per keyword forti
@@ -1366,10 +1367,19 @@ export async function parseLocally(text, members = [], familyId = null, currentM
 
   if (canonical.length === 0) return null
 
+  // ── Commit Evaluator: classify commit safety ──
+  const evalCtx = {
+    speakerRole: currentMember?.role || 'genitore',
+    speakerId: currentMember?.id || null,
+    speakerName: currentMember?.name || null,
+    members: normContext.members,
+  }
+  const enriched = evaluateCommitPolicy(canonical, evalCtx)
+
   const method = isNlpReady() ? 'NLP+Sinapsi' : 'Sinapsi'
 
   return {
-    actions: canonical,
+    actions: enriched,
     confidence: avgConfidence,
     usedAI: false,
     summary: `${canonical.length} ${canonical.length === 1 ? 'azione' : 'azioni'} (${method}, conf. ${(avgConfidence * 100).toFixed(0)}%)`,
