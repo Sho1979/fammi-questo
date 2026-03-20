@@ -187,13 +187,114 @@ function evaluateCalendar(action, ctx) {
   return buildCommit('light', 'event', { reasonCodes, missingFields, uiBadges })
 }
 
+// ─── TASK RULES (5-8) ─────────────────────────────────────────
+
+/** Strong ownership signals in Italian — 1st person verbs and self-references. */
+const OWNERSHIP_PATTERNS = [
+  /\b(?:devo|ho\s+da|mi\s+tocca|voglio|devo\s+io)\b/i,
+  /\bricordami\b/i,
+]
+
+/** Check if the text has a strong first-person ownership signal. */
+function hasStrongOwnership(text) {
+  if (!text) return false
+  return OWNERSHIP_PATTERNS.some(re => re.test(text))
+}
+
+/**
+ * Detect personal need (buying/getting for self) vs. structured external task.
+ * "devo comprare X", "devo prendere X", "mi serve X"
+ */
+function isPersonalNeed(text) {
+  if (!text) return false
+  return /\b(?:devo\s+comprare|devo\s+prendere|mi\s+serve|mi\s+servono|ho\s+bisogno)\b/i.test(text)
+}
+
+function evaluateTask(action, ctx) {
+  const hasAssignee = !!(action.assignedToId)
+  const text = action.textOriginal || ''
+  const strongOwnership = hasStrongOwnership(text)
+
+  // Rule 5: Explicit assignee + clear action → strong
+  if (hasAssignee && !strongOwnership) {
+    return buildCommit('strong', 'task')
+  }
+
+  // Rule 6/7: Speaker with ownership signal
+  if (hasAssignee && strongOwnership) {
+    // Rule 7: Personal need → self_reminder
+    if (isPersonalNeed(text)) {
+      return buildCommit('light', 'self_reminder', {
+        reasonCodes: [REASON_CODES.SELF_INTENT_NO_EXTERNAL],
+      })
+    }
+
+    // Rule 6: Strong ownership, auto-assigned to speaker → light task
+    if (action.assignedToId === ctx.speakerId) {
+      return buildCommit('light', 'task', {
+        reasonCodes: [REASON_CODES.SPEAKER_AUTO_ASSIGNED],
+      })
+    }
+
+    // Ownership signal + explicit other assignee → strong
+    return buildCommit('strong', 'task')
+  }
+
+  // Rule 8: No assignee, no ownership → block
+  return buildCommit('none', 'unresolved', {
+    reasonCodes: [REASON_CODES.AMBIGUOUS_SUBJECT, REASON_CODES.IMPERSONAL_NO_CONTEXT],
+    uiBadges: ['Chi deve farlo?'],
+  })
+}
+
+// ─── EXPENSE RULES (9) ────────────────────────────────────────
+
+function evaluateExpense(action, _ctx) {
+  if (typeof action.amount === 'number' && action.amount > 0) {
+    return buildCommit('strong', 'expense')
+  }
+  return buildCommit('light', 'expense', {
+    reasonCodes: [REASON_CODES.EXPENSE_MISSING_AMOUNT],
+    missingFields: ['amount'],
+    uiBadges: ['Manca importo'],
+  })
+}
+
+// ─── MEAL RULES (10) ──────────────────────────────────────────
+
+function evaluateMeal(action, _ctx) {
+  // Meals are always strong if validator approved
+  return buildCommit('strong', 'meal')
+}
+
+// ─── SHOPPING RULES (11-12) ───────────────────────────────────
+
+function evaluateShopping(action, ctx) {
+  // Rule 12: Child expressing material need → self_reminder
+  if (isMinor(ctx.speakerRole)) {
+    return buildCommit('light', 'self_reminder', {
+      reasonCodes: [REASON_CODES.SELF_INTENT_NO_EXTERNAL],
+    })
+  }
+
+  // Rule 11: Shopping with grocery context → strong
+  return buildCommit('strong', 'shopping')
+}
+
 // ─── FULL RULE ENGINE ─────────────────────────────────────────
 
 function evaluateFullRules(action, ctx) {
   switch (action.type) {
     case 'calendar':
       return evaluateCalendar(action, ctx)
-    // Task, expense, meal, shopping — Chunk 4
+    case 'task':
+      return evaluateTask(action, ctx)
+    case 'expense':
+      return evaluateExpense(action, ctx)
+    case 'meal':
+      return evaluateMeal(action, ctx)
+    case 'shopping':
+      return evaluateShopping(action, ctx)
     default:
       return buildCommit('light', action.type || 'unresolved', {
         reasonCodes: [REASON_CODES.UNKNOWN_TYPE_DEFAULTED],

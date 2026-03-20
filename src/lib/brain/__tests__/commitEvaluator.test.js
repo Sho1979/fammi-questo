@@ -464,6 +464,252 @@ describe('Commit Evaluator — Event Rules', () => {
   })
 })
 
+// ═══════════════════════════════════════════════════════════════
+// TASK RULES (5-8)
+// ═══════════════════════════════════════════════════════════════
+
+describe('Commit Evaluator — Task Rules', () => {
+  const taskBase = {
+    type: 'task',
+    dueDate: null,
+    category: null,
+    linkedEntity: null,
+    confidence: 0.88,
+    meta: baseMeta,
+  }
+
+  // ── Rule 5: Explicit assignee + clear action → strong ──
+  it('Rule 5: task with explicit assignee → commit_strong', () => {
+    const action = {
+      ...taskBase,
+      title: 'Portare Viola a danza',
+      assignedToId: 'mem_chiara',
+      assignedToName: 'Chiara',
+      textOriginal: 'Chiara porta Viola a danza',
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('strong')
+    expect(result.commit.previewType).toBe('task')
+  })
+
+  // ── Rule 6: 1st person + strong ownership → light + SPEAKER_AUTO_ASSIGNED ──
+  it('Rule 6: "devo fare la lavatrice" → commit_light + SPEAKER_AUTO_ASSIGNED', () => {
+    const action = {
+      ...taskBase,
+      title: 'Fare la lavatrice',
+      assignedToId: 'mem_cristian',
+      assignedToName: 'Cristian',
+      textOriginal: 'devo fare la lavatrice',
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('light')
+    expect(result.commit.previewType).toBe('task')
+    expect(result.commit.reasonCodes).toContain('SPEAKER_AUTO_ASSIGNED')
+  })
+
+  // ── Rule 7: Personal need → self_reminder ──
+  it('Rule 7: "devo comprare i libri" → commit_light + self_reminder', () => {
+    const action = {
+      ...taskBase,
+      title: 'Comprare libri',
+      assignedToId: 'mem_cristian',
+      assignedToName: 'Cristian',
+      textOriginal: 'devo comprare i libri',
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('light')
+    expect(result.commit.previewType).toBe('self_reminder')
+    expect(result.commit.reasonCodes).toContain('SELF_INTENT_NO_EXTERNAL')
+  })
+
+  // ── Rule 8: Impersonal, no context → block ──
+  it('Rule 8: "prenota dentista" (bare imperative, no assignee) → block', () => {
+    const action = {
+      ...taskBase,
+      title: 'Prenota dentista',
+      assignedToId: null,
+      assignedToName: null,
+      textOriginal: 'prenota dentista',
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('none')
+    expect(result.commit.writePolicy).toBe('block')
+    expect(result.commit.previewType).toBe('unresolved')
+    expect(result.commit.reasonCodes).toContain('AMBIGUOUS_SUBJECT')
+    expect(result.commit.canConfirm).toBe(false)
+  })
+
+  // ── Rule 6 edge: "mi tocca pagare la bolletta" → SPEAKER_AUTO_ASSIGNED ──
+  it('Rule 6 edge: "mi tocca pagare la bolletta" → SPEAKER_AUTO_ASSIGNED', () => {
+    const action = {
+      ...taskBase,
+      title: 'Pagare la bolletta',
+      assignedToId: 'mem_cristian',
+      assignedToName: 'Cristian',
+      textOriginal: 'mi tocca pagare la bolletta',
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('light')
+    expect(result.commit.reasonCodes).toContain('SPEAKER_AUTO_ASSIGNED')
+  })
+
+  // ── Rule 7 edge: "devo prendere le medicine" → self_reminder ──
+  it('Rule 7 edge: "devo prendere le medicine" → self_reminder', () => {
+    const action = {
+      ...taskBase,
+      title: 'Prendere le medicine',
+      assignedToId: 'mem_cristian',
+      assignedToName: 'Cristian',
+      textOriginal: 'devo prendere le medicine',
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('light')
+    expect(result.commit.previewType).toBe('self_reminder')
+  })
+
+  // ── Rule 8 edge: "chiamare pediatra" → block ──
+  it('Rule 8 edge: "chiamare pediatra" (3rd person, no assignee) → block', () => {
+    const action = {
+      ...taskBase,
+      title: 'Chiamare pediatra',
+      assignedToId: null,
+      assignedToName: null,
+      textOriginal: 'chiamare pediatra',
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('none')
+    expect(result.commit.writePolicy).toBe('block')
+  })
+
+  // ── Rule 6 negative: bare infinitive should NOT auto-assign ──
+  it('Rule 6 negative: "comprare libri per Viola" (bare infinitive, no assignee) → block', () => {
+    const action = {
+      ...taskBase,
+      title: 'Comprare libri per Viola',
+      assignedToId: null,
+      assignedToName: null,
+      textOriginal: 'comprare libri per Viola',
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('none')
+    expect(result.commit.writePolicy).toBe('block')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════
+// OTHER TYPES (Rules 9-12)
+// ═══════════════════════════════════════════════════════════════
+
+describe('Commit Evaluator — Other Types (Rules 9-12)', () => {
+  // ── Rule 9: Expense with amount > 0 → strong ──
+  it('Rule 9: expense with amount → commit_strong', () => {
+    const action = {
+      type: 'expense',
+      title: 'Spesa Conad',
+      amount: 45.50,
+      date: '2026-03-20',
+      category: 'spesa',
+      personIds: [],
+      personNames: [],
+      textOriginal: 'spesa conad 45 euro',
+      confidence: 0.90,
+      meta: baseMeta,
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('strong')
+    expect(result.commit.previewType).toBe('expense')
+  })
+
+  it('Rule 9 edge: expense with amount 0 → light + EXPENSE_MISSING_AMOUNT', () => {
+    const action = {
+      type: 'expense',
+      title: 'Spesa',
+      amount: 0,
+      date: '2026-03-20',
+      category: 'spesa',
+      personIds: [],
+      personNames: [],
+      textOriginal: 'spesa conad',
+      confidence: 0.85,
+      meta: baseMeta,
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('light')
+    expect(result.commit.reasonCodes).toContain('EXPENSE_MISSING_AMOUNT')
+  })
+
+  // ── Rule 10: Meal with dish → strong ──
+  it('Rule 10: meal with dish → commit_strong', () => {
+    const action = {
+      type: 'meal',
+      title: 'Pasta al pomodoro',
+      date: '2026-03-20',
+      slot: 'cena',
+      personIds: [],
+      personNames: [],
+      textOriginal: 'stasera pasta al pomodoro',
+      confidence: 0.88,
+      meta: baseMeta,
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('strong')
+    expect(result.commit.previewType).toBe('meal')
+  })
+
+  // ── Rule 11: Shopping → strong ──
+  it('Rule 11: shopping grocery items → commit_strong', () => {
+    const action = {
+      type: 'shopping',
+      title: 'Pannolini e latte',
+      personIds: [],
+      personNames: [],
+      textOriginal: 'servono pannolini e latte',
+      confidence: 0.88,
+      meta: baseMeta,
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('strong')
+    expect(result.commit.previewType).toBe('shopping')
+  })
+
+  // ── Rule 12: Child material need → self_reminder ──
+  it('Rule 12: child "mi servono le scarpe da danza" → self_reminder', () => {
+    const action = {
+      type: 'shopping',
+      title: 'Scarpe da danza',
+      personIds: ['mem_viola'],
+      personNames: ['Viola'],
+      textOriginal: 'mi servono le scarpe da danza',
+      confidence: 0.85,
+      meta: baseMeta,
+    }
+    const childCtx = {
+      ...BASE_CTX,
+      speakerRole: 'figlio',
+      speakerId: 'mem_viola',
+      speakerName: 'Viola',
+    }
+    const result = evaluateSingleAction({ ...action }, childCtx)
+    expect(result.commit.level).toBe('light')
+    expect(result.commit.previewType).toBe('self_reminder')
+    expect(result.commit.reasonCodes).toContain('SELF_INTENT_NO_EXTERNAL')
+  })
+
+  // ── Unknown type → default ──
+  it('Unknown type → commit_light + UNKNOWN_TYPE_DEFAULTED', () => {
+    const action = {
+      type: 'future_type',
+      title: 'Something',
+      textOriginal: 'qualcosa di nuovo',
+      confidence: 0.80,
+      meta: baseMeta,
+    }
+    const result = evaluateSingleAction({ ...action }, BASE_CTX)
+    expect(result.commit.level).toBe('light')
+    expect(result.commit.reasonCodes).toContain('UNKNOWN_TYPE_DEFAULTED')
+  })
+})
+
 describe('Commit Evaluator — Batch evaluation', () => {
   it('should evaluate multiple actions independently', () => {
     const actions = [
