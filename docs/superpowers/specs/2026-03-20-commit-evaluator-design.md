@@ -1,7 +1,7 @@
 # Commit Evaluator — Design Spec
 
 **Date:** 2026-03-20
-**Status:** Approved (v2 — post spec review)
+**Status:** Approved (v3 — post spec review + 5 user refinements)
 **Scope:** New policy layer between normalizer and preview that classifies commit safety
 
 ## Problem
@@ -48,7 +48,15 @@ text
 
 **C1 — Validator must allow date-less calendar actions to reach the evaluator.**
 
-Today, `actionValidator.js` hard-rejects calendar actions without a `date` field (line 159). But Rule 4 needs date-less event-like phrases ("ho catechismo") to survive validation so the evaluator can route them to `draft_only`. The fix: change `date` for calendar from a hard error to a **warning**. The evaluator then handles the disposition (draft_only for date-less events). The write guard provides the final safety net — no date-less record ever reaches the events table.
+Today, `actionValidator.js` hard-rejects calendar actions without a `date` field (line 159). But Rule 4 needs date-less event-like phrases ("ho catechismo") to survive validation so the evaluator can route them to `draft_only`.
+
+The fix must be **selective, not a general loosening:**
+- Change `date` from hard error to warning **only for `calendar` type actions**
+- `expense` and `meal` date requirements stay as hard errors (they have no draft path today)
+- The evaluator handles disposition (draft_only for date-less events)
+- The write guard provides the final safety net — no date-less record ever reaches the events table
+
+The principle: **"valid as minimum shape, not yet valid as strong commit."** The validator ensures structural minimum; the evaluator decides commit worthiness.
 
 **C2 — Draft system must support all action types.**
 
@@ -181,11 +189,22 @@ For logistics purposes:
 - `role === 'figlio'` → **minor** (not autonomous, needs escort for sport/school/medical events)
 - `role === 'genitore'` or `role === 'nonno'` → **autonomous adult**
 
-This is a product decision, not an age calculation. In this family app, children are always minors.
+This is a **policy v1 decision**, not an ontological truth or age calculation. In the current family structure, all `figlio` members are minors. Future versions may introduce age-based or per-member autonomy flags, but v1 uses role as the sole discriminant. The evaluator reads `role` from context — changing the policy later means changing one check, not restructuring the rules.
 
 ### Multi-Action Utterances
 
 When a single phrase produces multiple actions (e.g., "Domani Asia ha danza alle 17 e devo comprare i libri"), each action is evaluated independently. One action's commit level does not influence another's.
+
+**Partial failure logging:** When a multi-action phrase produces mixed results (some actions succeed, some degrade or block), the confirmation log must reflect each action's outcome individually. Log entries use explicit categories:
+
+```javascript
+// Each action in a multi-action phrase gets its own log entry:
+{ ok: true,  target: 'strong', msg: 'Evento creato: Danza Asia', type: 'calendar' }
+{ ok: true,  target: 'draft',  msg: 'Salvato come bozza: Comprare libri', type: 'task' }
+{ ok: false, target: 'block',  msg: 'Bloccato: AMBIGUOUS_SUBJECT', type: 'task' }
+```
+
+The user sees a per-action summary, not a single pass/fail for the whole phrase. This is critical for transparency: "your event was created, but the task was saved as a draft because..."
 
 ## The Rules
 
@@ -206,12 +225,15 @@ When a single phrase produces multiple actions (e.g., "Domani Asia ha danza alle
 
 So rule 4 applies only when there is NO temporal reference at all. Partial temporal context triggers sub-rules:
 
-**Sub-rule 1a/3a — Event with date but no time:**
-- Autonomous adult + date, no time → `commit_light` + PARTIAL_TEMPORAL_CONTEXT
-- Minor + date, no time, no logistics → `commit_light` + PARTIAL_TEMPORAL_CONTEXT + MINOR_LOGISTICS_UNRESOLVED
-- Both get `incomplete: "Manca l'orario"`
+**Sub-rule 1a/3a — Event with date but no time (PARTIAL_TEMPORAL_CONTEXT):**
 
-These are not new rules — they are the light-commit variant of rules 1 and 3 when time is absent but date is present.
+These sub-rules are the **direct consequence** of the temporal anchor definition above. When the evaluator detects a date but no time, it applies PARTIAL_TEMPORAL_CONTEXT and degrades the commit level to `light`:
+
+- **1a:** Autonomous adult + date, no time → `commit_light` + PARTIAL_TEMPORAL_CONTEXT + `incomplete: "Manca l'orario"`
+- **3a:** Minor + date, no time, no logistics → `commit_light` + PARTIAL_TEMPORAL_CONTEXT + MINOR_LOGISTICS_UNRESOLVED + `incomplete: "Manca l'orario"`
+- **3b:** Minor + date, no time, WITH logistics → `commit_light` + PARTIAL_TEMPORAL_CONTEXT + `incomplete: "Manca l'orario"`
+
+These are not new rules — they are the light-commit variant of rules 1 and 3 when time is absent but date is present. The reason code PARTIAL_TEMPORAL_CONTEXT is the link: it tells both the preview and the write guard exactly why the level was degraded.
 
 ### Tasks
 
@@ -251,13 +273,17 @@ Classify as shopping ONLY when:
 "Devo comprare i libri" → rule 7 (self_reminder), NOT rule 11 (shopping)
 "Servono pannolini e latte" → rule 11 (shopping)
 
-### Default Rules for Other Types
+### Default Rules for Other Types (Lighter Path)
+
+These types follow a **simplified evaluation path** — they don't need the full rule engine because their commit disposition is predictable from type alone. The evaluator still attaches `action.commit` for pipeline consistency, but the logic is a direct mapping, not a multi-condition evaluation:
 
 | # | Type | Default level | previewType | writePolicy | Notes |
 |---|------|---------------|-------------|-------------|-------|
-| 13 | `reminder` | light | task | commit_light | Reminders are treated as light tasks. `needsConfirm` flag already exists and is preserved. |
-| 14 | `note` | strong | task | commit_strong | Notes are informational, always committable if validator approved. |
-| 15 | `edit_action` | strong | (pass-through) | commit_strong | Edit actions go through the Resolver, not the evaluator's rules. The evaluator adds `action.commit` with `level: 'strong'` and lets the Resolver handle disposition. |
+| 13 | `reminder` | light | task | commit_light | Reminders are treated as light tasks. `needsConfirm` flag already exists and is preserved. No rule engine needed — type alone determines disposition. |
+| 14 | `note` | strong | task | commit_strong | Notes are informational, always committable if validator approved. Passthrough — evaluator stamps commit but applies no conditions. |
+| 15 | `edit_action` | strong | (pass-through) | commit_strong | Edit actions go through the Resolver, not the evaluator's rules. The evaluator adds `action.commit` with `level: 'strong'` and lets the Resolver handle disposition. Evaluator is a passthrough here. |
+
+**Implementation note:** In code, rules 13-15 should be a simple `switch` at the top of `evaluateSingleAction()`, returning early before the full rule engine runs. This keeps the hot path fast and makes it obvious these types don't participate in the complex evaluation.
 
 **Default for any unknown type:** If the validator approved the shape and no rule matches, default to `commit_light` with reasonCode `UNKNOWN_TYPE_DEFAULTED`. This prevents silent blocking of future action types.
 
