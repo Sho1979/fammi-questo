@@ -113,6 +113,15 @@ function evaluateResult(scenarioTruth) {
   const shouldWrite = expected.shouldWrite
   const writeCorrect = (shouldWrite && didWrite) || (!shouldWrite && !didWrite)
 
+  // KEY RULE: if shouldWrite=false and parser produced none/no action,
+  // the parser did the RIGHT thing (correctly declined to act).
+  // This is a success, not a parse error.
+  if (!shouldWrite && !didWrite && actual.intent === 'none') {
+    scenarioTruth.errorType = null
+    scenarioTruth.errorCause = null
+    return scenarioTruth
+  }
+
   if (parseCorrect && writeCorrect) {
     scenarioTruth.errorType = null
     scenarioTruth.errorCause = null
