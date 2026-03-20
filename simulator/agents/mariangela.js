@@ -77,10 +77,10 @@ const mariangela = {
     },
     {
       text: 'Ho comprato le cose per il pranzo di domenica al {{where}}',
-      intent: 'shopping',
-      category: 'ingredients',
+      intent: 'none',
+      category: 'status_report',
       truthConfidence: 'high',
-      shouldWrite: true,
+      shouldWrite: false,
       vars: ['where'],
       difficulty: 'easy',
     },

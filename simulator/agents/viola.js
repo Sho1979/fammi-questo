@@ -95,10 +95,10 @@ const viola = {
     },
     {
       text: 'Ho finito i compiti di {{subject}}',
-      intent: 'task',
-      category: 'gamification',
+      intent: 'none',
+      category: 'status_report',
       truthConfidence: 'high',
-      shouldWrite: true,
+      shouldWrite: false,
       vars: ['subject'],
       difficulty: 'easy',
     },

@@ -200,19 +200,23 @@ export function isActionable(sentence) {
 }
 
 // Past tense markers that indicate reporting, not commanding
-const PAST_TENSE_CHECK = /(?:ho|ha|abbiamo|hanno)\s+(?:portato|comprato|pagato|fatto|preso|messo|detto|visto|chiamato|mangiato|cucinato|lavato|pulito|finito|completato|preparato|sistemato|riordinato)/i
+const PAST_TENSE_CHECK = /(?:ho|ha|abbiamo|hanno)\s+(?:portato|comprato|pagato|fatto|preso|messo|detto|visto|chiamato|mangiato|cucinato|lavato|pulito|finito|completato|preparato|sistemato|riordinato|rifatto|stirato|spazzato|apparecchiato|sparecchiato)/i
 const PAST_TENSE_STATE = /\b(?:era\s+(?:buon[oa]|bell[oa])|erano\s+|è\s+stat[oa]\s+(?:spostat|cancellat|bell|buon)|è\s+andat[oa]|sono\s+andat[ei]|siamo\s+andat[ei])\b/i
 
 // Exception: "ho speso/pagato X euro" is a valid expense
 const PAST_TENSE_EXPENSE = /(?:ho|ha|abbiamo)\s+(?:speso|pagato|preso)\s+\d/i
 // Exception: "ha fatto la spesa X euro" is valid
 const PAST_TENSE_EXPENSE2 = /(?:ha|ho)\s+(?:fatto\s+la\s+spesa|speso|pagato).*\d+\s*(?:euro|€)/i
+// Exception: "ho prenotato la visita" creates a future event, not a report
+const PAST_TENSE_FUTURE_ACTION = /(?:ho|ha|abbiamo)\s+(?:prenotato|fissato|iscritto|confermato)\s+/i
 
 export function isPastTenseReport(sentence) {
   const lower = sentence.trim().toLowerCase()
   // Exceptions: expense/cost reports with amounts are valid actions
   if (PAST_TENSE_EXPENSE.test(lower)) return false
   if (PAST_TENSE_EXPENSE2.test(lower)) return false
+  // Exception: "ho prenotato/fissato" creates future events
+  if (PAST_TENSE_FUTURE_ACTION.test(lower)) return false
   // Check for past tense verbs or state descriptions
   if (PAST_TENSE_CHECK.test(lower)) return true
   if (PAST_TENSE_STATE.test(lower)) return true
