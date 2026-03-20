@@ -78,16 +78,19 @@ function addDays(isoDate, days) {
  * @returns {import('../engine/dayLoop.js').ScenarioTruth}
  */
 function deleteEventPhrase(agent, simDateStr, event) {
-  const title = (event.title || event.description || 'l\'appuntamento').toLowerCase();
+  // Extract a short natural title from the event
+  const fullTitle = (event.title || event.description || 'l\'appuntamento').toLowerCase();
+  const words = fullTitle.split(/\s+/).filter(w =>
+    !['il','la','le','lo','i','gli','un','una','di','del','della','per','a','al','alla','e','da','con','su','ho','ha','devo'].includes(w)
+  );
+  const title = words.slice(0, 3).join(' ') || 'l\'appuntamento';
   const evDate = event.date || event.start_date || '';
   const ref = evDate ? dateRef(simDateStr, evDate) : '';
 
   const templates = [
     `Cancella ${title}${ref ? ' di ' + ref : ''}`,
     `Togli ${title} dal calendario`,
-    `Non serve piu\' ${title}${ref ? ' ' + ref : ''}`,
     `Annulla ${title}`,
-    `${title} e\' saltato, toglilo`,
   ];
 
   return makeTruth(agent, simDateStr, pickRandom(templates), {
@@ -105,15 +108,17 @@ function deleteEventPhrase(agent, simDateStr, event) {
  * @returns {import('../engine/dayLoop.js').ScenarioTruth}
  */
 function deleteTaskPhrase(agent, simDateStr, task) {
-  // Shorten title to first 3-4 words max, like a real user would say
+  // Extract a short, natural keyword from the task title
+  // Skip articles and prepositions, take the first meaningful word(s)
   const fullTitle = (task.title || task.description || 'la cosa da fare').toLowerCase();
-  const title = fullTitle.split(/\s+/).slice(0, 4).join(' ');
+  const words = fullTitle.split(/\s+/).filter(w =>
+    !['il','la','le','lo','i','gli','un','una','di','del','della','per','a','al','alla','e','da','con','su'].includes(w)
+  );
+  const title = words.slice(0, 2).join(' ') || 'la cosa';
 
   const templates = [
     `Cancella ${title} dalla lista`,
-    `Togli ${title}, non serve piu\'`,
-    `Ho gia\' fatto ${title}`,
-    `${title} e\' fatto, toglilo`,
+    `Togli ${title}`,
     `Cancella ${title}`,
   ];
 

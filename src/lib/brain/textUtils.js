@@ -209,6 +209,8 @@ const PAST_TENSE_EXPENSE = /(?:ho|ha|abbiamo)\s+(?:speso|pagato|preso)\s+\d/i
 const PAST_TENSE_EXPENSE2 = /(?:ha|ho)\s+(?:fatto\s+la\s+spesa|speso|pagato).*\d+\s*(?:euro|€)/i
 // Exception: "ho prenotato la visita" creates a future event, not a report
 const PAST_TENSE_FUTURE_ACTION = /(?:ho|ha|abbiamo)\s+(?:prenotato|fissato|iscritto|confermato)\s+/i
+// Exception: "mi ha detto di + infinitive" is an order/task, not a report
+const PAST_TENSE_INDIRECT_ORDER = /(?:mi|ci)\s+ha\s+detto\s+di\s+/i
 
 export function isPastTenseReport(sentence) {
   const lower = sentence.trim().toLowerCase()
@@ -217,6 +219,8 @@ export function isPastTenseReport(sentence) {
   if (PAST_TENSE_EXPENSE2.test(lower)) return false
   // Exception: "ho prenotato/fissato" creates future events
   if (PAST_TENSE_FUTURE_ACTION.test(lower)) return false
+  // Exception: "mi ha detto di fare X" is an indirect order
+  if (PAST_TENSE_INDIRECT_ORDER.test(lower)) return false
   // Check for past tense verbs or state descriptions
   if (PAST_TENSE_CHECK.test(lower)) return true
   if (PAST_TENSE_STATE.test(lower)) return true
