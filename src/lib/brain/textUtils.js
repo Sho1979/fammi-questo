@@ -200,7 +200,7 @@ export function isActionable(sentence) {
 }
 
 // Past tense markers that indicate reporting, not commanding
-const PAST_TENSE_CHECK = /(?:ho|ha|abbiamo|hanno)\s+(?:portato|comprato|pagato|fatto|preso|messo|detto|visto|chiamato|mangiato|cucinato|lavato|pulito)/i
+const PAST_TENSE_CHECK = /(?:ho|ha|abbiamo|hanno)\s+(?:portato|comprato|pagato|fatto|preso|messo|detto|visto|chiamato|mangiato|cucinato|lavato|pulito|finito|completato|preparato|sistemato|riordinato)/i
 const PAST_TENSE_STATE = /\b(?:era\s+(?:buon[oa]|bell[oa])|erano\s+|è\s+stat[oa]\s+(?:spostat|cancellat|bell|buon)|è\s+andat[oa]|sono\s+andat[ei]|siamo\s+andat[ei])\b/i
 
 // Exception: "ho speso/pagato X euro" is a valid expense

@@ -815,6 +815,25 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       /\bda\s+(?:ritirare|firmare|consegnare|compilare|restituire)\b/i,
     ]
     const isDirectTask = taskDirectPatterns.some(re => re.test(lower.trim()))
+    // Override: "bisogna/devo comprare" + grocery items → shopping, not task
+    const GROCERY_WORDS_RE = /\b(?:pane|latte|uova|formaggio|burro|yogurt|prosciutto|salame|mortadella|verdur[ae]|frutta|carne|pollo|pesce|detersivo|sapone|pannolini|biscotti|crackers|cereali|pasta(?!\s+(?:al|con|di\s+\w+\s+per)))\b/i
+    const hasGroceryObject = /\b(?:comprare|compra|prendere|prendi)\b/i.test(lower) && GROCERY_WORDS_RE.test(lower)
+    if (isDirectTask && hasGroceryObject) {
+      const action = buildAction('shopping', sentence, {
+        amount: null, date, time: null, persons, members, logistics, timeCtx,
+        category: null, currentMember,
+      })
+      actions.push(action)
+      totalConfidence += 0.82
+      if (debug) {
+        addSentenceTrace(debugTrace, {
+          sentence, intent: 'shopping', confidence: 0.82, source: 'l0d_grocery_override',
+          people: persons.map(p => p.name), date, time, amount: null,
+          actionsGenerated: [action], warnings: sentenceWarnings,
+        })
+      }
+      continue
+    }
     if (isDirectTask) {
       const action = buildAction('task', sentence, {
         amount: null, date, time, persons, members, logistics, timeCtx,
