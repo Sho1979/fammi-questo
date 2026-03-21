@@ -13,30 +13,43 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const MODEL = "claude-haiku-4-5-20251001";
 const MAX_TOKENS = 1024;
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey, x-client-info",
-  "Content-Type": "application/json",
-};
+const ALLOWED_ORIGINS = [
+  "http://localhost:5173",       // dev
+  "https://localhost",           // Capacitor iOS/Android
+  "capacitor://localhost",       // Capacitor iOS
+  "http://localhost",            // Capacitor Android
+];
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get("Origin") || "";
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey, x-client-info",
+    "Content-Type": "application/json",
+  };
+}
 
 Deno.serve(async (req: Request) => {
+  const corsHeaders = getCorsHeaders(req);
+
   // CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: CORS_HEADERS });
+    return new Response(null, { headers: corsHeaders });
   }
 
   if (req.method !== "POST") {
     return new Response(
       JSON.stringify({ ok: false, error: "Method not allowed" }),
-      { status: 405, headers: CORS_HEADERS }
+      { status: 405, headers: corsHeaders }
     );
   }
 
   if (!ANTHROPIC_API_KEY) {
     return new Response(
       JSON.stringify({ ok: false, error: "API key mancante — configura ANTHROPIC_API_KEY" }),
-      { status: 500, headers: CORS_HEADERS }
+      { status: 500, headers: corsHeaders }
     );
   }
 
@@ -46,7 +59,7 @@ Deno.serve(async (req: Request) => {
   } catch {
     return new Response(
       JSON.stringify({ ok: false, error: "JSON body non valido" }),
-      { status: 400, headers: CORS_HEADERS }
+      { status: 400, headers: corsHeaders }
     );
   }
 
@@ -55,7 +68,7 @@ Deno.serve(async (req: Request) => {
   if (!text || typeof text !== "string" || text.trim().length === 0) {
     return new Response(
       JSON.stringify({ ok: false, error: "Testo vuoto" }),
-      { status: 400, headers: CORS_HEADERS }
+      { status: 400, headers: corsHeaders }
     );
   }
 
@@ -83,7 +96,7 @@ Deno.serve(async (req: Request) => {
       console.error("Anthropic API error:", anthropicResponse.status, errText);
       return new Response(
         JSON.stringify({ ok: false, error: `Errore AI (HTTP ${anthropicResponse.status})` }),
-        { status: 502, headers: CORS_HEADERS }
+        { status: 502, headers: corsHeaders }
       );
     }
 
@@ -124,7 +137,7 @@ Deno.serve(async (req: Request) => {
           actions: validActions,
           summary: parsed.summary ?? `${validActions.length} azioni trovate`,
         }),
-        { headers: CORS_HEADERS }
+        { headers: corsHeaders }
       );
     } catch {
       // Fallback: save as note
@@ -134,14 +147,14 @@ Deno.serve(async (req: Request) => {
           actions: [{ type: "note", text: text.slice(0, 500), originalFragment: text.slice(0, 500) }],
           summary: "Non ho capito — salvato come nota",
         }),
-        { headers: CORS_HEADERS }
+        { headers: corsHeaders }
       );
     }
   } catch (err: any) {
     console.error("Edge function error:", err);
     return new Response(
       JSON.stringify({ ok: false, error: `Errore interno: ${err.message}` }),
-      { status: 500, headers: CORS_HEADERS }
+      { status: 500, headers: corsHeaders }
     );
   }
 });

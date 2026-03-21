@@ -5,6 +5,7 @@
  */
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { destroyNlp } from '../lib/brainNlp.js'
 
 const useAuthStore = create(
   persist(
@@ -34,17 +35,22 @@ const useAuthStore = create(
       setOwnerName: (name) => set({ ownerName: name }),
 
       /** Logout current member (back to member-select screen) */
-      logout: () => set({ currentMember: null, sessionPin: null }),
+      logout: () => {
+        destroyNlp()
+        set({ currentMember: null, sessionPin: null })
+      },
 
       /** Full reset: wipe all auth state (used by "Reset app") */
-      fullReset: () =>
+      fullReset: () => {
+        destroyNlp()
         set({
           familyId: null,
           currentMember: null,
           isSetupComplete: false,
           ownerName: null,
           sessionPin: null,
-        }),
+        })
+      },
 
       // --- Getters (derived from currentMember) ---
 

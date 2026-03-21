@@ -35,6 +35,7 @@ import { scheduleShoppingReminders, scheduleDailyTaskReminders } from '../lib/no
 import { notifyAll, notify } from './useNotifications.js'
 import { addMealPlan } from './useMeals.js'
 import { AI_MAX_DAILY_CALLS } from '../lib/constants.js'
+import { purgeTombstones } from '../lib/dbMaintenance.js'
 
 // Rate limit: max AI_MAX_DAILY_CALLS calls/day (local parse is unlimited)
 // Persistito in Dexie settings con lastResetDate per sopravvivere al reload
@@ -103,25 +104,28 @@ export default function useBrain() {
   // ─── INIT NLP.js + DECAY ALL'AVVIO ─────────────────────────
   useEffect(() => {
     if (!familyId) return
+    let cancelled = false
 
     // Decay (una volta per sessione)
     if (!decayApplied) {
       decayApplied = true
       applyDecay(familyId).then(() => {
-        console.log('[Brain] Decay applicato')
+        if (!cancelled) console.log('[Brain] Decay applicato')
       }).catch(err => {
-        console.warn('[Brain] Decay failed:', err)
+        if (!cancelled) console.warn('[Brain] Decay failed:', err)
       })
     }
 
     // Cleanup expired conversation drafts (fire-and-forget)
-    expireOldDrafts(familyId).catch(err =>
-      console.warn('[Brain] Draft cleanup failed:', err)
-    )
+    expireOldDrafts(familyId).catch(err => {
+      if (!cancelled) console.warn('[Brain] Draft cleanup failed:', err)
+    })
+
+    // Purge soft-deleted records older than 90 days (fire-and-forget)
+    purgeTombstones().catch(() => {})
 
     // Init NLP.js — Promise singleton: se già in corso, riusa la stessa Promise
     // Evita race condition con mount simultanei (React Strict Mode, ecc.)
-    let cancelled = false
     if (!nlpInitPromise) {
       console.log('[Brain] Avvio inizializzazione NLP.js...')
       nlpInitPromise = initNlp(familyId)
@@ -401,75 +405,85 @@ export default function useBrain() {
 
     // 5. RELATIONAL LAYER: messageContext + entityRelations
     // Crea il contesto messaggio e collega tutte le azioni con same_message
+    // Batched in a single Dexie transaction for performance
     try {
       const successfulActions = log.filter(l => l.ok)
       if (successfulActions.length > 0 && familyId) {
         const contextId = crypto.randomUUID()
         const now = new Date().toISOString()
-        await db.messageContexts.add({
-          id: contextId,
-          family_id: familyId,
-          source_type: result?.usedAI ? 'voice' : 'text',
-          raw_text: originalTextRef.current || '',
-          normalized_text: (originalTextRef.current || '').toLowerCase().trim(),
-          created_by_member_id: currentMember?.id || null,
-          created_at: now,
-          updated_at: now,
-          parser_version: 'v2',
-          confidence_overall: result?.confidence || 0,
-          status: 'confirmed',
-          action_count: successfulActions.length,
-          _deleted: false,
-          _version: 1,
-          _device_id: localStorage.getItem('fm_device_id') || null,
-        })
+        const deviceId = localStorage.getItem('fm_device_id') || null
 
-        // Link tutte le azioni al messageContext con caused_by_message
-        // e tra di loro con same_message
-        const entityIds = [...refToIdMap.entries()]
-        for (const [actionRef, entityId] of entityIds) {
-          const actionType = confirmedActions.find(a => a.meta?.actionRef === actionRef)?.type || 'unknown'
-          // caused_by_message: azione → messageContext
-          await db.entityRelations.add({
-            id: crypto.randomUUID(),
+        await db.transaction('rw', [db.messageContexts, db.entityRelations], async () => {
+          await db.messageContexts.add({
+            id: contextId,
             family_id: familyId,
-            from_entity_type: actionType,
-            from_entity_id: entityId,
-            relation_type: 'caused_by_message',
-            to_entity_type: 'message_context',
-            to_entity_id: contextId,
+            source_type: result?.usedAI ? 'voice' : 'text',
+            raw_text: originalTextRef.current || '',
+            normalized_text: (originalTextRef.current || '').toLowerCase().trim(),
+            created_by_member_id: currentMember?.id || null,
             created_at: now,
             updated_at: now,
-            created_by_system: true,
+            parser_version: 'v2',
+            confidence_overall: result?.confidence || 0,
+            status: 'confirmed',
+            action_count: successfulActions.length,
             _deleted: false,
             _version: 1,
-            _device_id: localStorage.getItem('fm_device_id') || null,
+            _device_id: deviceId,
           })
-        }
 
-        // same_message: link tra ogni coppia di azioni nate dallo stesso messaggio
-        const ids = [...refToIdMap.values()]
-        for (let i = 0; i < ids.length; i++) {
-          for (let j = i + 1; j < ids.length; j++) {
-            const typeI = confirmedActions.find(a => refToIdMap.get(a.meta?.actionRef) === ids[i])?.type || 'unknown'
-            const typeJ = confirmedActions.find(a => refToIdMap.get(a.meta?.actionRef) === ids[j])?.type || 'unknown'
-            await db.entityRelations.add({
+          // Batch all entity relations
+          const relations = []
+
+          // caused_by_message: azione → messageContext
+          const entityIds = [...refToIdMap.entries()]
+          for (const [actionRef, entityId] of entityIds) {
+            const actionType = confirmedActions.find(a => a.meta?.actionRef === actionRef)?.type || 'unknown'
+            relations.push({
               id: crypto.randomUUID(),
               family_id: familyId,
-              from_entity_type: typeI,
-              from_entity_id: ids[i],
-              relation_type: 'same_message',
-              to_entity_type: typeJ,
-              to_entity_id: ids[j],
+              from_entity_type: actionType,
+              from_entity_id: entityId,
+              relation_type: 'caused_by_message',
+              to_entity_type: 'message_context',
+              to_entity_id: contextId,
               created_at: now,
               updated_at: now,
               created_by_system: true,
               _deleted: false,
               _version: 1,
-              _device_id: localStorage.getItem('fm_device_id') || null,
+              _device_id: deviceId,
             })
           }
-        }
+
+          // same_message: link tra ogni coppia di azioni
+          const ids = [...refToIdMap.values()]
+          for (let i = 0; i < ids.length; i++) {
+            for (let j = i + 1; j < ids.length; j++) {
+              const typeI = confirmedActions.find(a => refToIdMap.get(a.meta?.actionRef) === ids[i])?.type || 'unknown'
+              const typeJ = confirmedActions.find(a => refToIdMap.get(a.meta?.actionRef) === ids[j])?.type || 'unknown'
+              relations.push({
+                id: crypto.randomUUID(),
+                family_id: familyId,
+                from_entity_type: typeI,
+                from_entity_id: ids[i],
+                relation_type: 'same_message',
+                to_entity_type: typeJ,
+                to_entity_id: ids[j],
+                created_at: now,
+                updated_at: now,
+                created_by_system: true,
+                _deleted: false,
+                _version: 1,
+                _device_id: deviceId,
+              })
+            }
+          }
+
+          if (relations.length > 0) {
+            await db.entityRelations.bulkAdd(relations)
+          }
+        })
       }
       // Clustered notification: one notification for all actions from this message
       // Use refToIdMap to identify which actions were successfully persisted

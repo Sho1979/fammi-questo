@@ -252,3 +252,10 @@ db.version(9).stores({
   messageContexts: 'id, family_id, created_by_member_id, created_at, status',
   entityRelations: 'id, family_id, [from_entity_type+from_entity_id], [to_entity_type+to_entity_id], relation_type',
 })
+
+// v10 — Compound indexes for efficient date-range queries
+db.version(10).stores({
+  expenses: 'id, family_id, [family_id+date], date, category, person_id',
+  events: 'id, family_id, [family_id+date], date, person_id',
+  tasks: 'id, family_id, [family_id+due_date], due_date, assigned_to, status',
+})

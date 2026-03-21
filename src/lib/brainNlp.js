@@ -96,8 +96,15 @@ export async function initNlp(familyId) {
   if (isTraining) {
     // Aspetta che il training in corso finisca
     return new Promise((resolve) => {
+      const MAX_WAIT = 30000
+      const start = Date.now()
       const check = setInterval(() => {
         if (isReady) { clearInterval(check); resolve(true) }
+        else if (Date.now() - start > MAX_WAIT) {
+          clearInterval(check)
+          console.error('[NLP] Training timeout after 30s')
+          resolve(false)
+        }
       }, 200)
     })
   }
@@ -438,4 +445,13 @@ export async function getNlpStats(familyId) {
  */
 export function isNlpReady() {
   return isReady && nlpInstance !== null
+}
+
+/** Free NLP model memory — call on logout / family switch */
+export function destroyNlp() {
+  nlpInstance = null
+  isReady = false
+  isTraining = false
+  pendingDocs = []
+  console.info('[NLP] Model destroyed — will retrain on next init')
 }

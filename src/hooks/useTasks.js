@@ -368,16 +368,19 @@ export function useWeeklyLeaderboard(familyId) {
         m.role === 'child' || m.role === 'figlio' || m.role === 'ragazzo'
       )
 
-      // All completed tasks this week (approved only, not proposals pending)
-      const allTasks = await db.tasks
+      // Completed tasks this week (compound index, approved only)
+      const weekTasks = await db.tasks
+        .where('[family_id+due_date]')
+        .between([familyId, weekStart], [familyId, weekEnd], true, true)
+        .and((t) => !t._deleted && t.status === 'done' && t.approved)
+        .toArray()
+
+      // All-time completed tasks (for total count display)
+      const allDoneTasks = await db.tasks
         .where('family_id')
         .equals(familyId)
         .and((t) => !t._deleted && t.status === 'done' && t.approved)
         .toArray()
-
-      const weekTasks = allTasks.filter((t) =>
-        t.due_date >= weekStart && t.due_date <= weekEnd
-      )
 
       // Build leaderboard
       const leaderboard = members.map((m) => {
@@ -388,7 +391,7 @@ export function useWeeklyLeaderboard(familyId) {
         })
 
         // All-time completed
-        const completedAll = allTasks.filter((t) => {
+        const completedAll = allDoneTasks.filter((t) => {
           const doer = t.done_by || t.assigned_to
           return doer === m.id
         })

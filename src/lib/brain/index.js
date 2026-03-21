@@ -117,8 +117,14 @@ export async function brainParse(text, context = {}) {
   if (debug) trace.warnings.push('low_local_confidence')
 
   try {
+    const AI_TIMEOUT_MS = 5000
     const tAI0 = performance.now()
-    const aiResult = await parseVoiceWithAI(text, context, localResult)
+    const aiResult = await Promise.race([
+      parseVoiceWithAI(text, context, localResult),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('AI timeout')), AI_TIMEOUT_MS)
+      ),
+    ])
     const tAI1 = performance.now()
 
     if (debug) {

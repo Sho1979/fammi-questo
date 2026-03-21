@@ -22,11 +22,40 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 //   babel: { plugins: [['babel-plugin-react-compiler', {}]] },
 // })
 
+// ─── CSP: inject Content-Security-Policy only in production builds ──
+// In dev, Vite uses eval() and dynamic imports that CSP would block.
+const CSP_POLICY = [
+  "default-src 'self'",
+  "script-src 'self' https://challenges.cloudflare.com",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self'",
+  "connect-src 'self' https://ixmaxjtkievjkqzeepje.supabase.co wss://ixmaxjtkievjkqzeepje.supabase.co https://api.anthropic.com https://challenges.cloudflare.com",
+  "frame-src https://challenges.cloudflare.com",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join('; ')
+
+function cspPlugin() {
+  return {
+    name: 'html-csp',
+    transformIndexHtml(html, ctx) {
+      if (ctx.server) return html // skip in dev
+      return html.replace(
+        '<!-- CSP_PLACEHOLDER -->',
+        `<meta http-equiv="Content-Security-Policy" content="${CSP_POLICY}" />`
+      )
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(), // SWC — fast dev. Sostituire con reactCompiler per auto-memoization
     tailwindcss(),
+    cspPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {

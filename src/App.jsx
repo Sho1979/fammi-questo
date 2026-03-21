@@ -11,6 +11,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import useAuthStore from './store/authStore.js'
 import { initNativeNotifications } from './lib/nativeNotifications.js'
+import useAppLifecycle from './hooks/useAppLifecycle.js'
 import { db } from './lib/localDb.js'
 
 import AppShell from './components/layout/AppShell.jsx'
@@ -84,6 +85,9 @@ function RootRedirect() {
 export default function App() {
   // Init native notifications (noop su web, attivo su Android/iOS)
   useEffect(() => { initNativeNotifications() }, [])
+
+  // Clear session PIN when app goes to background
+  useAppLifecycle()
 
   return (
     <BrowserRouter>
