@@ -180,6 +180,25 @@ const CHATTER_PATTERNS = [
   /\b(?:è\s+(?:un\s+)?bel\s|è\s+bell[oa]|è\s+brav[oa])\b/i,
 ]
 
+// ─── CONTEXTUAL PREFIX STRIPPER ─────────────────────────────────
+// Strips conversational context prefixes that confuse the NLP classifier.
+// "Tornando da lavoro, martedi sera facciamo frittata" → "martedi sera facciamo frittata"
+// "Mentre ero in macchina, ho speso 50 euro" → "ho speso 50 euro"
+// Entities (date, person, amount) are extracted from the FULL text before stripping.
+const CONTEXT_PREFIXES_RE = /^(?:tornando\s+da\s+\w+|mentre\s+(?:ero|eravamo|stavo)\s+(?:in|al|a)\s+\w+|al\s+telefono\s+(?:mi|ci)\s+hanno\s+detto\s+che|ho\s+pensato\s+che|prima\s+di\s+uscire|appena\s+(?:sveglia?o?|arrivat[oa])|dopo\s+(?:pranzo|cena|lavoro|scuola)|stamattina\s+presto|(?:ah\s+)?senti|guarda|allora|sai\s+che|ma\s+dai|ehi|niente|comunque|vabb[eè]|aspetta)\s*[,.]?\s+/i
+
+/**
+ * Remove conversational context prefixes from a sentence.
+ * These prefixes add context but confuse NLP intent classification.
+ * Returns the sentence with the prefix removed (if any).
+ */
+export function stripContextPrefix(sentence) {
+  const stripped = sentence.replace(CONTEXT_PREFIXES_RE, '')
+  // Don't strip if it would remove the entire sentence or leave < 3 words
+  if (stripped.length < 5) return sentence
+  return stripped
+}
+
 // Single word that is clearly not a command (too ambiguous alone)
 const SINGLE_WORD_BLOCK = /^(?:ciao|ok|si|no|boh|forse|grazie|bene|bella|bravo|brava|niente|nulla)$/i
 
@@ -250,15 +269,18 @@ export function isPastTenseReport(sentence) {
  * "Luca e Giulia" non splitta (congiunzione tra entità, non verbo dopo "e").
  * "e compra latte" splitta (cambio intent: verbo d'azione dopo "e").
  */
-const ACTION_VERBS_RE = /^(?:compra|comprare|prendi|prendere|porta|portare|segna|segnare|ricordami|ricordaci|ricorda|avvisami|avvisaci|prenota|prenotare|paga|pagare|chiama|chiamare|fissa|fissare|lava|lavare|pulisci|pulire|stira|stirare|prepara|preparare|cucina|cucinare|ordina|ordinare|metti|mettere|togli|togliere|butta|buttare|controlla|controllare|sistema|sistemare|svuota|svuotare|riordina|riordinare|stendi|stendere|apparecchia|sparecchia|spazza|aspira|innaffia|firma|firmare|stampa|stampare|rinnova|rinnovare|iscrivere|iscrivi|consegna|consegnare)$/i
+const ACTION_VERBS_RE = /^(?:compra|comprare|prendi|prendere|porta|portare|segna|segnare|ricordami|ricordaci|ricorda|ricordati|ricordatevi|avvisami|avvisaci|prenota|prenotare|paga|pagare|chiama|chiamare|fissa|fissare|lava|lavare|pulisci|pulire|stira|stirare|prepara|preparare|preparo|cucina|cucinare|cucino|ordina|ordinare|metti|mettere|togli|togliere|butta|buttare|controlla|controllare|sistema|sistemare|svuota|svuotare|riordina|riordinare|stendi|stendere|apparecchia|sparecchia|spazza|aspira|innaffia|firma|firmare|stampa|stampare|rinnova|rinnovare|iscrivere|iscrivi|consegna|consegnare|devi|dovete|bisogna|facciamo|faccio|fai|fa|fanno|andiamo|vado|vai|va)$/i
+
+/** Parole temporali che possono precedere un verbo d'azione dopo "e" / "," */
+const TIME_WORDS_RE = /^(?:domani|dopodomani|stasera|stanotte|stamattina|oggi|luned[iì]|marted[iì]|mercoled[iì]|gioved[iì]|venerd[iì]|sabato|domenica|lunedi|martedi|mercoledi|giovedi|venerdi|dopo|prima|alle|la|il|nel|per)$/i
 
 export function splitSentences(text) {
-  // Proteggi i punti negli orari (16.30, 8.00) e nei decimali (3.50 euro)
-  const protected_ = text.replace(/(\d)[.](\d)/g, '$1\x00$2')
+  // Proteggi punti e virgole negli orari (16.30, 18,30) e nei decimali (3.50, 3,50 euro)
+  const protected_ = text.replace(/(\d)[.](\d)/g, '$1\x00$2').replace(/(\d)[,](\d)/g, '$1\x01$2')
 
   // Phase 1: split on explicit delimiters and Italian speech interruptions
   const phase1 = protected_
-    .split(/[.;!?]+|\bah\s+(?:e|anche|poi)\b|\be\s+poi\b|\be\s+anche\b|\binoltre\b|\bdopo(?:diché)?\b|\bpoi\s+anche\b/i)
+    .split(/[.;!?]+|\bah\s+(?:e|anche|poi)\b|\be\s+poi\b|\bpoi\s+anche\b|\be\s+anche\b|\binoltre\b|\bdopo(?:diché)?\b|(?<!\bo\s)\bpoi\b/i)
 
   // Phase 2: verb-transition splitting on "e" and ","
   // Split when "e" or "," is followed by a known action verb (= intent change).
@@ -273,9 +295,25 @@ export function splitSentences(text) {
 
     while ((match = ePattern.exec(segment)) !== null) {
       const afterE = segment.slice(match.index + match[0].length).trim()
-      const firstWordAfterE = afterE.split(/\s+/)[0]
+      const wordsAfterE = afterE.split(/\s+/)
+      const firstWord = wordsAfterE[0]
 
-      if (firstWordAfterE && ACTION_VERBS_RE.test(firstWordAfterE)) {
+      let hasVerb = firstWord && ACTION_VERBS_RE.test(firstWord)
+
+      // If first word is a time reference ("domenica", "domani", "stasera"),
+      // check subsequent words for an action verb (up to 3 words ahead)
+      if (!hasVerb && firstWord && TIME_WORDS_RE.test(firstWord)) {
+        for (let wi = 1; wi < Math.min(wordsAfterE.length, 4); wi++) {
+          if (ACTION_VERBS_RE.test(wordsAfterE[wi])) {
+            hasVerb = true
+            break
+          }
+          // Stop scanning if we hit another time word (keep looking) or a non-time non-verb word
+          if (!TIME_WORDS_RE.test(wordsAfterE[wi])) break
+        }
+      }
+
+      if (hasVerb) {
         // Split here: action verb after "e" = new intent
         parts.push(segment.slice(lastIdx, match.index))
         lastIdx = match.index + match[0].length
@@ -294,8 +332,17 @@ export function splitSentences(text) {
       const verbSplit = []
       let current = commaParts[0]
       for (let i = 1; i < commaParts.length; i++) {
-        const firstWord = commaParts[i].trim().split(/\s+/)[0]
-        if (firstWord && ACTION_VERBS_RE.test(firstWord)) {
+        const words = commaParts[i].trim().split(/\s+/)
+        const firstWord = words[0]
+        let hasVerb = firstWord && ACTION_VERBS_RE.test(firstWord)
+        // Check past time word for verb (same logic as Phase 2)
+        if (!hasVerb && firstWord && TIME_WORDS_RE.test(firstWord)) {
+          for (let wi = 1; wi < Math.min(words.length, 4); wi++) {
+            if (ACTION_VERBS_RE.test(words[wi])) { hasVerb = true; break }
+            if (!TIME_WORDS_RE.test(words[wi])) break
+          }
+        }
+        if (hasVerb) {
           verbSplit.push(current)
           current = commaParts[i]
         } else {
@@ -314,6 +361,6 @@ export function splitSentences(text) {
   })
 
   return phase2
-    .map(s => s.replace(/\x00/g, '.').trim())
+    .map(s => s.replace(/\x00/g, '.').replace(/\x01/g, ',').trim())
     .filter(s => s.length > 2)
 }

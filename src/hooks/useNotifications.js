@@ -14,6 +14,45 @@ import { createRecord, updateRecord, deleteRecord } from '../lib/crud.js'
 import useAuthStore from '../store/authStore.js'
 import { showNativeNotification } from '../lib/nativeNotifications.js'
 
+// ─── Role Visibility Rules ───────────────────────────────────────
+// Which roles can see notifications for each data table.
+// Must match the app's data access policy.
+
+const ROLE_VISIBILITY = {
+  events:        { genitore: true, figlio: true, nonno: true },
+  tasks:         { genitore: true, figlio: true, nonno: true },
+  expenses:      { genitore: true, figlio: false, nonno: false },
+  shoppingItems: { genitore: true, figlio: false, nonno: true },
+  mealPlans:     { genitore: true, figlio: true, nonno: true },
+}
+
+// Map notification types to their corresponding data table for role filtering
+const TYPE_TO_TABLE = {
+  expense: 'expenses',
+  shopping: 'shoppingItems',
+  calendar: 'events',
+  task_assigned: 'tasks',
+  task_complete: 'tasks',
+  task_proposed: 'tasks',
+  task_approved: 'tasks',
+  task_rejected: 'tasks',
+  meal: 'mealPlans',
+}
+
+/** Check if a member's role is allowed to see notifications for a given type. */
+function isRoleAllowed(memberRole, notificationType) {
+  const table = TYPE_TO_TABLE[notificationType]
+  if (!table) return true // Unknown type → allow (general notifications go to everyone)
+  const rules = ROLE_VISIBILITY[table]
+  if (!rules) return true
+  // Normalize role names: 'parent'/'elder' → app equivalents
+  const normalizedRole = memberRole === 'parent' ? 'genitore'
+    : memberRole === 'elder' ? 'nonno'
+    : memberRole === 'child' ? 'figlio'
+    : memberRole // already 'genitore'/'figlio'/'nonno'
+  return rules[normalizedRole] !== false
+}
+
 // ─── Actions ────────────────────────────────────────────────────
 
 /** Create a notification for a specific member. */
@@ -59,7 +98,7 @@ export async function notify(memberId, { type, title, message, icon, data, messa
   }
 }
 
-/** Broadcast a notification to all family members (except sender). */
+/** Broadcast a notification to all family members (except sender), filtered by role visibility. */
 export async function notifyAll({ type, title, message, icon, data, excludeMemberId }) {
   const familyId = useAuthStore.getState().familyId
   if (!familyId) return
@@ -70,18 +109,20 @@ export async function notifyAll({ type, title, message, icon, data, excludeMembe
     .toArray()
   for (const m of members) {
     if (excludeMemberId && m.id === excludeMemberId) continue
+    // Role visibility filter: skip members whose role can't see this notification type
+    if (!isRoleAllowed(m.role, type)) continue
     await notify(m.id, { type, title, message, icon, data })
   }
 }
 
-/** Notify only parents. */
+/** Notify only parents (genitore role). */
 export async function notifyParents({ type, title, message, icon, data }) {
   const familyId = useAuthStore.getState().familyId
   if (!familyId) return
   const parents = await db.members
     .where('family_id')
     .equals(familyId)
-    .and((m) => !m._deleted && (m.role === 'parent' || m.role === 'elder' || m.role === 'genitore'))
+    .and((m) => !m._deleted && (m.role === 'parent' || m.role === 'genitore'))
     .toArray()
   for (const m of parents) {
     await notify(m.id, { type, title, message, icon, data })

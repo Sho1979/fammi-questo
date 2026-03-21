@@ -21,7 +21,7 @@
 import { db } from '../localDb.js'
 import { classify, isNlpReady } from '../brainNlp.js'
 import { NLP_CONFIDENCE_HIGH, NLP_CONFIDENCE_LOW, SYNAPSE_CONFIDENCE_THRESHOLD, SHADOW_CONFIRM_THRESHOLD } from './config.js'
-import { stemIT, tokenizeForMatching, splitSentences, isNegatedAction, isActionable, isPastTenseReport } from './textUtils.js'
+import { stemIT, tokenizeForMatching, splitSentences, isNegatedAction, isActionable, isPastTenseReport, stripContextPrefix } from './textUtils.js'
 import {
   parseLocalDate, parseLocalTime, parseTimeRange,
   parseAmount, extractPersons, extractLogistics,
@@ -29,7 +29,7 @@ import {
 } from './entityExtractor.js'
 import { BOOTSTRAP_SYNAPSES } from './patterns.js'
 import { getTimeContext, computeSynapseActivations } from './synapseEngine.js'
-import { buildAction, guessCategoryFromSynapses } from './actionBuilder.js'
+import { buildAction, guessCategoryFromSynapses, categoryFromActivity } from './actionBuilder.js'
 import { addSentenceTrace, isDebugEnabled } from './debugLogger.js'
 import { normalizeAndValidateActions } from './actionNormalizer.js'
 import { evaluateCommitPolicy } from './commitEvaluator.js'
@@ -141,9 +141,7 @@ export async function parseLocally(text, members = [], familyId = null, currentM
   let lastDate = null
 
   for (const sentence of sentences) {
-    const lower = sentence.toLowerCase()
-    const tokens = tokenizeForMatching(sentence)
-    const stems = tokens.map(stemIT)
+    // ─── ENTITY EXTRACTION from FULL text (before prefix stripping) ───
     let persons = extractPersons(sentence, members)
     let date = parseLocalDate(sentence)
     // Propagate date from previous segment if this segment has no explicit date
@@ -154,6 +152,14 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     const time = parseLocalTime(sentence)
     const amount = parseAmount(sentence)
     const logistics = extractLogistics(sentence, members)
+
+    // ─── STRIP CONTEXT PREFIX for intent classification ───
+    // "Tornando da lavoro, martedi facciamo frittata" → "martedi facciamo frittata"
+    // Entities are already extracted from the full text above.
+    const cleanSentence = stripContextPrefix(sentence)
+    const lower = cleanSentence.toLowerCase()
+    const tokens = tokenizeForMatching(cleanSentence)
+    const stems = tokens.map(stemIT)
 
 
     // ─── COREFERENCE: risolvi pronomi con contesto frase precedente ───
@@ -191,6 +197,53 @@ export async function parseLocally(text, members = [], familyId = null, currentM
 
     // Oggetto per raccolta dati debug di questa frase
     const sentenceWarnings = []
+
+    // ─── CROSS-SEGMENT LOGISTICS MERGE ───
+    // "chiara la va a riprendere" as a follow-up to "porta asia ad allenamento"
+    // If this segment is a pure pickup reference (has pickupBy but no subject/event data),
+    // merge the pickup person into the most recent calendar event that needs pickup.
+    if (logistics?.pickupBy && !logistics?.subject && amount === null) {
+      const pickupVerb = logistics.actionVerb === 'riprendere' || logistics.actionVerb === 'prendere' || logistics.actionVerb === 'ritirare'
+      if (pickupVerb) {
+        // Find the most recent calendar action that needs pickup
+        const lastCalEvent = [...actions].reverse().find(a => a.type === 'calendar' && a.needsPickup)
+        if (lastCalEvent) {
+          lastCalEvent.pickupBy = logistics.pickupBy.name
+          lastCalEvent.needsPickup = false
+          // Update logistics object
+          if (lastCalEvent.logistics) {
+            lastCalEvent.logistics.pickupById = logistics.pickupBy.id
+            lastCalEvent.logistics.pickupByName = logistics.pickupBy.name
+          }
+          // If this segment has a time, use it as the event's end time (pickup time)
+          if (time && !lastCalEvent.timeEnd) {
+            lastCalEvent.timeEnd = time
+            lastCalEvent.incomplete = null
+          } else if (!time && !lastCalEvent.timeEnd) {
+            // Pickup person found but no pickup time → warn
+            lastCalEvent.incomplete = `Manca orario ripresa (${logistics.pickupBy.name})`
+          } else {
+            lastCalEvent.incomplete = null
+          }
+          // Remove orphan "Chi va a riprendere?" notes that are now resolved
+          const subjectName = lastCalEvent.assignedTo || lastCalEvent.personNames?.[0]
+          if (subjectName) {
+            const noteIdx = actions.findIndex(a =>
+              a.type === 'note' && a.isReminder && a.text?.includes('riprendere') && a.text?.includes(subjectName)
+            )
+            if (noteIdx !== -1) actions.splice(noteIdx, 1)
+          }
+          if (debug) {
+            addSentenceTrace(debugTrace, {
+              sentence, intent: 'logistics_merge', confidence: 0.9, source: 'cross_segment_pickup',
+              people: [logistics.pickupBy.name], date, time, amount: null,
+              warnings: ['merged_pickup_into_previous_event'],
+            })
+          }
+          continue
+        }
+      }
+    }
 
     // ─── ACTIONABILITY FILTER: skip frasi senza intent azionabile ───
     // "ciao come stai" → skip. "Ho fame" → skip. "Asia ha preso 8" → skip.
@@ -481,6 +534,21 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       continue
     }
 
+    // ─── IMPLICIT DRIVER: "devo portare X" → speaker is the driver ───
+    // When the sentence uses first person ("devo", "porto", "accompagno") and logistics
+    // has a subject but no driver, infer the speaker (currentMember) as the driver.
+    if (logistics?.subject && !logistics.driver && logistics.actionVerb && currentMember) {
+      const firstPersonRe = /\b(?:devo|porto|accompagno|vado\s+a|passo\s+a)\b/i
+      if (firstPersonRe.test(lower)) {
+        logistics.driver = currentMember
+        if (logistics.actionVerb === 'portare') {
+          logistics.accompaniedBy = currentMember
+        } else {
+          logistics.pickupBy = currentMember
+        }
+      }
+    }
+
     // ─── L0b1: Logistica con soggetto → calendar (intercetta prima di NLP/sinapsi) ───
     if (logistics?.subject && logistics?.actionVerb) {
       const luogo = extractLocation(sentence, members)
@@ -502,7 +570,7 @@ export async function parseLocally(text, members = [], familyId = null, currentM
         const calAction = {
           type: 'calendar', date, title: calTitle,
           assignedTo: logistics.subject.name, time,
-          category: activity ? 'sport' : 'logistica',
+          category: categoryFromActivity(activity) || 'logistica',
           incomplete: !time ? 'Manca l\'orario' : undefined,
         }
         if (activity) calAction.activity = activity
@@ -579,7 +647,7 @@ export async function parseLocally(text, members = [], familyId = null, currentM
           assignedTo: logistics.subject.name, time,
           location: luogo || null,
           activity: activity || null,
-          category: activity ? 'sport' : 'logistica',
+          category: categoryFromActivity(activity) || 'logistica',
           needsDriver: true,
           logistics: { subject: logistics.subject.name, actionVerb: logistics.actionVerb },
           incomplete: 'Manca chi accompagna/riprende',
@@ -739,18 +807,20 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     ]
     const isSocialPersonal = socialPersonalPatterns.some(re => re.test(lower))
     const hasDateContext = date !== todayStrEarly || /\b(?:domani|dopodomani|luned[iì]|marted[iì]|mercoled[iì]|gioved[iì]|venerd[iì]|sabato|domenica)\b/i.test(lower)
-    if (isSocialPersonal && hasDateContext && amount === null) {
+    if (isSocialPersonal && amount === null) {
+      // Se non c'è data esplicita, passa null — il commit evaluator lo manderà in draft
+      const actionDate = hasDateContext ? date : null
       const action = buildAction('calendar', sentence, {
-        amount: null, date, time, persons, members, logistics, timeCtx,
+        amount: null, date: actionDate, time, persons, members, logistics, timeCtx,
         category: guessCategoryFromSynapses('calendar', tokens, stems, allSynapses) || 'personale',
       })
       actions.push(action)
-      totalConfidence += 0.75
+      totalConfidence += hasDateContext ? 0.75 : 0.45
 
       if (debug) {
         addSentenceTrace(debugTrace, {
-          sentence, intent: 'calendar', confidence: 0.75, source: 'l0_social_personal',
-          people: persons.map(p => p.name), date, time,
+          sentence, intent: 'calendar', confidence: hasDateContext ? 0.75 : 0.45, source: hasDateContext ? 'l0_social_personal' : 'l0_social_personal_no_date',
+          people: persons.map(p => p.name), date: actionDate, time,
           actionsGenerated: [action], warnings: sentenceWarnings,
         })
       }
@@ -846,6 +916,9 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       /^(?:non\s+dimenticare?\s+(?:di\s+)?)/i,
       /^(?:bisogna|occorre|tocca)\s+(?!andare\s+a\s+prendere)/i,
       /^(?:serve|servono)\s+(?:prenotare|chiamare|fissare|organizzare|preparare|controllare|verificare)/i,
+      // "mi servono le scarpe" / "che mi servono le ..." → task (need to procure something)
+      /(?:mi|ci|gli|le)\s+serv(?:e|ono)\s+(?:le|il|lo|la|i|gli|un[oa]?)\s+/i,
+      /^(?:che\s+)?(?:mi|ci)\s+serv(?:e|ono)\s+/i,
       /^(?:devo|dobbiamo)\s+(?:parlare|chiamare|prenotare|iscrivere|firmare|portare\s+(?:il?|l[aoe])|rinnovare|pagare)/i,
       /^(?:iscrivere|iscrizione|prenotare|fissare|rinnovare)\s+/i,
       /^(?:preparare|consegnare|portare|lavare|stirare|pulire|controllare|organizzare|sistemare)\s+(?:il?|la|le|i|lo|gli|un[oa]?)\b/i,
@@ -856,7 +929,7 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     ]
     const isDirectTask = taskDirectPatterns.some(re => re.test(lower.trim()))
     // Override: "bisogna/devo comprare" + grocery items → shopping, not task
-    const GROCERY_WORDS_RE = /\b(?:pane|latte|uova|formaggio|burro|yogurt|prosciutto|salame|mortadella|verdur[ae]|frutta|carne|pollo|pesce|detersivo|sapone|pannolini|biscotti|crackers|cereali|pasta(?!\s+(?:al|con|di\s+\w+\s+per)))\b/i
+    const GROCERY_WORDS_RE = /\b(?:pane|latte|uova|formaggio|burro|yogurt|prosciutto|salame|mortadella|mozzarella|verdur[ae]|frutta|carne|pollo|pesce|olio|aceto|farina|zucchero|riso|detersivo|sapone|shampoo|pannolini|nurofen|tachipirina|biscotti|crackers|cereali|carta\s*igienica|pasta(?!\s+(?:al|con|di\s+\w+\s+per)))\b/i
     const hasGroceryObject = /\b(?:comprare|compra|prendere|prendi)\b/i.test(lower) && GROCERY_WORDS_RE.test(lower)
     if (isDirectTask && hasGroceryObject) {
       const action = buildAction('shopping', sentence, {
@@ -966,7 +1039,7 @@ export async function parseLocally(text, members = [], familyId = null, currentM
 
     if (isNlpReady()) {
       try {
-        const nlpResult = await classify(sentence)
+        const nlpResult = await classify(cleanSentence)
         if (nlpResult.intent !== 'None' && nlpResult.score > 0.1) {
           nlpScore = nlpResult.score
           if (nlpResult.action) {
@@ -1187,7 +1260,7 @@ export async function parseLocally(text, members = [], familyId = null, currentM
         title: calTitle,
         assignedTo: logistics.subject.name,
         time,
-        category: finalCategory || (activity ? 'sport' : 'altro'),
+        category: finalCategory || (categoryFromActivity(activity)),
         incomplete: !time ? 'Manca l\'orario' : undefined,
       }
       if (isDropOff) {
@@ -1285,7 +1358,7 @@ export async function parseLocally(text, members = [], familyId = null, currentM
         assignedTo: logistics.subject.name,
         time,
         location: luogo || null,
-        category: finalCategory || (activity ? 'sport' : 'logistica'),
+        category: finalCategory || (categoryFromActivity(activity) || 'logistica'),
         needsDriver: true,
         logistics: { subject: logistics.subject.name, actionVerb: logistics.actionVerb },
         incomplete: 'Manca chi accompagna/riprende',
@@ -1341,7 +1414,7 @@ export async function parseLocally(text, members = [], familyId = null, currentM
 
   if (actions.length === 0) return null
 
-  const avgConfidence = totalConfidence / actions.length
+  const avgConfidence = Math.min(1.0, totalConfidence / actions.length)
 
   // ─── NORMALIZZAZIONE CANONICA ─────────────────────────────────
   // Tutti i rami (L0 pattern, L1 NLP.js, L2 sinapsi) convergono qui.

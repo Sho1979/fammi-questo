@@ -393,6 +393,12 @@ export async function runOrchestrated(familyId, members, agents, db, config = {}
           writePolicy: result.actual?.actions?.[0]?.commit?.writePolicy || null,
           commitReasonCodes: result.actual?.actions?.[0]?.commit?.reasonCodes || [],
           previewType: result.actual?.actions?.[0]?.commit?.previewType || null,
+          // Compound phrase tracking
+          isCompound: result.expected?.intent === 'compound',
+          expectedActionCount: result.expected?.expectedActions?.length || 1,
+          actualActionCount: result.actual?.actions?.length || (result.actual?.intent ? 1 : 0),
+          expectedActionTypes: result.expected?.expectedActions || [result.expected?.intent],
+          actualActionTypes: (result.actual?.actions || []).map(a => a.type),
         }
 
         trajectories.push(trajectory)

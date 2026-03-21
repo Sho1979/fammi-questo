@@ -5,7 +5,10 @@
   "scripts": {
     "sim": "node runner.js",
     "sim:short": "node runner.js --weeks=4",
-    "sim:dry": "node runner.js --weeks=1 --dry"
+    "sim:dry": "node runner.js --weeks=1 --dry",
+    "neuroloop": "node neuroloop.js",
+    "neuroloop:quick": "node neuroloop.js --iterations=2 --families=1 --weeks=2",
+    "neuroloop:full": "node neuroloop.js --iterations=5 --families=3 --weeks=4"
   },
   "dependencies": {
     "fake-indexeddb": "^6.0.0"

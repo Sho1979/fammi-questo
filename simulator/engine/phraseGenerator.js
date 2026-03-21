@@ -24,6 +24,7 @@ const INTENT_TABLE_MAP = {
   meal: 'mealPlans',
   reminder: 'tasks',
   edit_action: null,
+  compound: null, // multi-action — tracked via expectedActions
   none: null,
   unknown: null,
   noise: null,
@@ -201,6 +202,7 @@ export function generatePhrase(agent, template, simDateStr, worldState) {
     truthConfidence: template.truthConfidence || 'medium',
     expected: {
       intent: template.intent,
+      expectedActions: template.expectedActions || null,
       entities: entityVars,
       dbEffect,
       shouldWrite: template.shouldWrite ?? false,

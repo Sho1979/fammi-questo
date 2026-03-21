@@ -136,6 +136,58 @@ const cristian = {
       difficulty: 'medium',
     },
 
+    // ---- COMPOUND: multi-action (5) ---- logistics + split ----------------
+    {
+      text: 'Domani porto {{person}} a allenamento alle {{time}} poi Chiara la devi riprendere',
+      intent: 'compound',
+      expectedActions: ['calendar', 'task'],
+      category: 'transport',
+      truthConfidence: 'high',
+      shouldWrite: true,
+      vars: ['person', 'time'],
+      difficulty: 'hard',
+    },
+    {
+      text: 'Porto {{person}} dal dentista alle {{time}} poi Chiara la va a riprendere e pagare {{amount}} euro la dottoressa',
+      intent: 'compound',
+      expectedActions: ['calendar', 'task', 'expense'],
+      category: 'health',
+      truthConfidence: 'high',
+      shouldWrite: true,
+      vars: ['person', 'time', 'amount'],
+      difficulty: 'hard',
+    },
+    {
+      text: 'Ho speso {{amount}} euro al {{where}}, ricordami di pagare la bolletta',
+      intent: 'compound',
+      expectedActions: ['expense', 'reminder'],
+      category: null,
+      truthConfidence: 'high',
+      shouldWrite: true,
+      vars: ['amount', 'where'],
+      difficulty: 'medium',
+    },
+    {
+      text: '{{day}} porto Asia a scuola alle {{time}} poi passo al {{where}}',
+      intent: 'compound',
+      expectedActions: ['calendar', 'calendar'],
+      category: 'transport',
+      truthConfidence: 'high',
+      shouldWrite: true,
+      vars: ['day', 'time', 'where'],
+      difficulty: 'medium',
+    },
+    {
+      text: 'Stasera {{meal}} per tutti, ho speso {{amount}} euro al supermercato',
+      intent: 'compound',
+      expectedActions: ['meal', 'expense'],
+      category: null,
+      truthConfidence: 'high',
+      shouldWrite: true,
+      vars: ['meal', 'amount'],
+      difficulty: 'medium',
+    },
+
     // ---- BORDERLINE: ambiguous (2) ---- 20 % -------------------------------
     {
       text: 'Domani forse porto io {{person}}',

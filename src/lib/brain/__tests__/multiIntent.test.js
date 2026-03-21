@@ -147,4 +147,22 @@ describe('splitSentences — verb-transition', () => {
     const result = splitSentences('porta Asia a danza e poi compra il latte e poi ricordami la bolletta')
     expect(result.length).toBeGreaterThanOrEqual(3)
   })
+
+  it('standalone "poi" splits compound phrases', () => {
+    const result = splitSentences('domani devo portare asia ad allenamento alle 12 poi chiara la va a riprendere, chiara ricordati che devi dare i 100 euro per l iscrizione')
+    expect(result.length).toBe(3)
+    expect(result[0]).toMatch(/allenamento/i)
+    expect(result[1]).toMatch(/riprendere/i)
+    expect(result[2]).toMatch(/100 euro/i)
+  })
+
+  it('"prima o poi" does NOT split', () => {
+    const result = splitSentences('prima o poi devo farlo')
+    expect(result).toHaveLength(1)
+  })
+
+  it('comma + ricordati splits correctly', () => {
+    const result = splitSentences('compra il pane, ricordati di chiamare il dottore')
+    expect(result).toHaveLength(2)
+  })
 })

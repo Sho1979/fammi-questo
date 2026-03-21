@@ -6,6 +6,22 @@ import { extractLocation, extractActivity, extractShoppingQuantity } from './ent
 import { levenshtein } from './textUtils.js'
 
 // ═══════════════════════════════════════════════════════════════
+// ACTIVITY → CATEGORY MAPPING
+// ═══════════════════════════════════════════════════════════════
+const MEDICAL_ACTIVITIES = /^(?:visita|visita medica|controllo|check-?up|dentista|pediatra|oculista|ortopedico|fisioterapia|analisi|ecografia|radiografia|vaccino|vaccinazione)$/i
+const SCHOOL_ACTIVITIES = /^(?:scuola|compiti|lezione|ripetizione|studio|interrogazione|verifica|esame|catechismo|scout)$/i
+const HOBBY_ACTIVITIES = /^(?:piano|chitarra|violino|canto|disegno|pittura|ceramica|teatro|cinema|museo|mostra)$/i
+
+export function categoryFromActivity(activity) {
+  if (!activity) return 'altro'
+  if (MEDICAL_ACTIVITIES.test(activity)) return 'medico'
+  if (SCHOOL_ACTIVITIES.test(activity)) return 'scuola'
+  if (HOBBY_ACTIVITIES.test(activity)) return 'hobby'
+  // Default to sport for physical activities (danza, nuoto, allenamento, partita, gara, karate, judo, etc.)
+  return 'sport'
+}
+
+// ═══════════════════════════════════════════════════════════════
 // BUILD ACTION — costruisce l'oggetto azione dal tipo
 // ═══════════════════════════════════════════════════════════════
 export function buildAction(type, sentence, ctx) {
@@ -59,8 +75,14 @@ export function buildAction(type, sentence, ctx) {
 
       action.time = time
       if (activity) action.activity = activity
-      action.category = category || (activity ? 'sport' : 'altro')
-      if (!time) action.incomplete = 'Manca l\'orario'
+      action.category = category || categoryFromActivity(activity)
+      // Flag incomplete if missing critical fields
+      if (!date) {
+        action.incomplete = 'Manca la data'
+        action.warnings = [...(action.warnings || []), 'missing_date']
+      } else if (!time) {
+        action.incomplete = 'Manca l\'orario'
+      }
 
       // Logistica: driver ≠ eventPerson → metti driver come pickup/accompagnatore
       if (driverPerson && eventPerson && driverPerson.id !== eventPerson.id) {

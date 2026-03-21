@@ -322,6 +322,20 @@ export function evaluateSingleAction(action, ctx) {
 
   // Full rule engine
   action.commit = evaluateFullRules(action, ctx)
+
+  // ── Incomplete guard: never commit "strong" when action has missing fields ──
+  if (action.incomplete && action.commit.level === 'strong') {
+    action.commit.level = 'light'
+    action.commit.writePolicy = POLICY_MAP.light
+    action.commit.canWrite = true
+    if (!action.commit.uiBadges.includes(action.incomplete)) {
+      action.commit.uiBadges.push(action.incomplete)
+    }
+    if (!action.commit.reasonCodes.includes(REASON_CODES.PARTIAL_TEMPORAL_CONTEXT)) {
+      action.commit.reasonCodes.push(REASON_CODES.PARTIAL_TEMPORAL_CONTEXT)
+    }
+  }
+
   return action
 }
 

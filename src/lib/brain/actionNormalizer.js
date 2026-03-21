@@ -163,7 +163,10 @@ function normalizeCalendar(raw, ctx, index) {
   }
 
   // ─── Incomplete ───
-  if (!action.timeStart && !action.isAbsence) {
+  if (!action.date) {
+    action.incomplete = 'Manca la data'
+    action.warnings.push('missing_date')
+  } else if (!action.timeStart && !action.isAbsence) {
     action.incomplete = 'Manca l\'orario'
   } else {
     action.incomplete = raw.incomplete || null
@@ -240,6 +243,12 @@ function normalizeExpense(raw, ctx, index) {
     } else {
       action.personName = raw.person
     }
+  }
+
+  // Flag incomplete if amount is missing/zero
+  if (!action.amount || action.amount <= 0) {
+    action.incomplete = 'Manca l\'importo'
+    action.warnings = [...(action.warnings || []), 'missing_amount']
   }
 
   return action

@@ -23,6 +23,7 @@ const INTENT_TABLE_MAP = {
   meal: 'mealPlans',
   reminder: 'tasks',
   edit_action: null,
+  compound: null, // multi-action — multiple tables
   none: null,
   unknown: null,
   noise: null,
@@ -107,6 +108,35 @@ function intentsMatch(expected, actual) {
  */
 function evaluateResult(scenarioTruth) {
   const { expected, actual } = scenarioTruth
+
+  // ── Compound intent: compare action types instead of single intent ──
+  if (expected.intent === 'compound' && expected.expectedActions) {
+    const expectedSorted = [...expected.expectedActions].sort()
+    const actualTypes = (actual.actions || []).map(a => a.type)
+    // Normalize: reminder ↔ task (same table)
+    const normalize = t => (t === 'reminder' ? 'task' : t)
+    const actualSorted = actualTypes.map(normalize).sort()
+    const expectedNorm = expectedSorted.map(normalize).sort()
+
+    const countMatch = actualTypes.length === expected.expectedActions.length
+    const typesMatch = JSON.stringify(expectedNorm) === JSON.stringify(actualSorted)
+
+    if (countMatch && typesMatch) {
+      scenarioTruth.errorType = null
+      scenarioTruth.errorCause = null
+      return scenarioTruth
+    }
+
+    // Classify compound error
+    if (!countMatch) {
+      scenarioTruth.errorType = 'parse_error'
+      scenarioTruth.errorCause = `compound: expected ${expected.expectedActions.length} actions, got ${actualTypes.length} (expected [${expectedSorted}], got [${actualSorted}])`
+    } else {
+      scenarioTruth.errorType = 'parse_error'
+      scenarioTruth.errorCause = `compound: action types mismatch (expected [${expectedSorted}], got [${actualSorted}])`
+    }
+    return scenarioTruth
+  }
 
   const parseCorrect = intentsMatch(expected.intent, actual.intent)
   const didWrite = actual.dbEffect !== null

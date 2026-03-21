@@ -159,6 +159,58 @@ const chiara = {
       difficulty: 'easy',
     },
 
+    // ---- COMPOUND: multi-action (5) ---- logistics + split ----------------
+    {
+      text: 'Domani porto {{person}} dal {{health}} alle {{time}} poi Cristian la devi riprendere',
+      intent: 'compound',
+      expectedActions: ['calendar', 'task'],
+      category: 'health',
+      truthConfidence: 'high',
+      shouldWrite: true,
+      vars: ['person', 'health', 'time'],
+      difficulty: 'hard',
+    },
+    {
+      text: 'Ho prenotato {{health}} per {{person}} {{day}} alle {{time}}, ricordami di portare i documenti',
+      intent: 'compound',
+      expectedActions: ['calendar', 'reminder'],
+      category: 'health',
+      truthConfidence: 'high',
+      shouldWrite: true,
+      vars: ['health', 'person', 'day', 'time'],
+      difficulty: 'medium',
+    },
+    {
+      text: 'Stasera preparo {{dish}} e {{day}} facciamo {{dish}}',
+      intent: 'compound',
+      expectedActions: ['meal', 'meal'],
+      category: 'dinner',
+      truthConfidence: 'high',
+      shouldWrite: true,
+      vars: ['dish', 'day', 'dish'],
+      difficulty: 'medium',
+    },
+    {
+      text: 'Ho speso {{amount}} euro in {{where}} per la spesa, bisogna comprare ancora {{grocery}} e {{grocery}}',
+      intent: 'compound',
+      expectedActions: ['expense', 'shopping'],
+      category: 'groceries',
+      truthConfidence: 'high',
+      shouldWrite: true,
+      vars: ['amount', 'where', 'grocery', 'grocery'],
+      difficulty: 'medium',
+    },
+    {
+      text: '{{day}} alle {{time}} {{person}} ha il saggio di danza poi andiamo tutti a cena fuori',
+      intent: 'compound',
+      expectedActions: ['calendar', 'calendar'],
+      category: 'events',
+      truthConfidence: 'high',
+      shouldWrite: true,
+      vars: ['day', 'time', 'person'],
+      difficulty: 'medium',
+    },
+
     // ---- BORDERLINE: ambiguous (3) ---- ~21 % -------------------------------
     {
       text: 'Serve qualcosa per domani ma non mi ricordo cosa',

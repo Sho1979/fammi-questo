@@ -103,11 +103,12 @@ export function parseLocalDate(text, today = new Date()) {
 // ═══════════════════════════════════════════════════════════════
 export function parseLocalTime(text) {
   const lower = text.toLowerCase()
-  const m1 = lower.match(/all[e']?\s*(\d{1,2})(?:[:.:](\d{2}))?/)
+  // Separatori orario: ":" "." "," — tutti comuni in italiano (18:30, 18.30, 18,30)
+  const m1 = lower.match(/all[e']?\s*(\d{1,2})(?:[:.,:.](\d{2}))?/)
   if (m1) return `${m1[1].padStart(2, '0')}:${m1[2] || '00'}`
-  const m2 = lower.match(/(?:verso|per|intorno\s+all[e']?)\s*(?:le\s+)?(\d{1,2})(?:[:.:](\d{2}))?/)
+  const m2 = lower.match(/(?:verso|per|intorno\s+all[e']?)\s*(?:le\s+)?(\d{1,2})(?:[:.,:.](\d{2}))?/)
   if (m2) return `${m2[1].padStart(2, '0')}:${m2[2] || '00'}`
-  const m3 = lower.match(/(?:ore|h)\s*(\d{1,2})(?:[:.:](\d{2}))?/)
+  const m3 = lower.match(/(?:ore|h)\s*(\d{1,2})(?:[:.,:.](\d{2}))?/)
   if (m3) return `${m3[1].padStart(2, '0')}:${m3[2] || '00'}`
   return null
 }
@@ -131,7 +132,7 @@ export function parseTimeRange(text) {
   const lower = text.toLowerCase()
 
   // 1. Range esplicito: "dalle X alle Y"
-  const m = lower.match(/dall[e']?\s*(\d{1,2})(?:[:.:](\d{2}))?\s+all[e']?\s*(\d{1,2})(?:[:.:](\d{2}))?/)
+  const m = lower.match(/dall[e']?\s*(\d{1,2})(?:[:.,:.](\d{2}))?\s+all[e']?\s*(\d{1,2})(?:[:.,:.](\d{2}))?/)
   if (m) {
     return {
       start: `${m[1].padStart(2, '0')}:${m[2] || '00'}`,
@@ -434,8 +435,8 @@ export function extractLogistics(text, members) {
     }
   }
 
-  // ── Pattern collettivi: "dobbiamo/devo/bisogna andare a prendere NAME" ──
-  // Nessun driver esplicito, ma c'è un soggetto (la persona da prendere)
+  // ── Pattern collettivi / prima persona: "dobbiamo/devo/porto/prendo NAME" ──
+  // Nessun driver esplicito, ma c'è un soggetto (la persona da portare/prendere)
   if (!driver && !subject) {
     const collectivePickupPatterns = [
       { re: new RegExp(`(?:dobbiamo|devo|devono|bisogna|occorre|tocca)\\s+(?:andare\\s+a\\s+|passare\\s+a\\s+)?prend(?:er[eao]|e|ono)\\s+(?:la\\s+|il\\s+|l[''']\\s*)?(${NAME})`), verb: 'prendere' },
@@ -443,6 +444,11 @@ export function extractLogistics(text, members) {
       { re: new RegExp(`(?:dobbiamo|devo|devono|bisogna)\\s+(?:andare\\s+a\\s+)?riprend(?:er[eao]|e|ono)\\s+(?:la\\s+|il\\s+|l[''']\\s*)?(${NAME})`), verb: 'riprendere' },
       { re: new RegExp(`(?:dobbiamo|devo|devono|bisogna|tocca)\\s+(?:andare\\s+a\\s+)?ritira(?:re)?\\s+(?:la\\s+|il\\s+|l[''']\\s*)?(${NAME})`), verb: 'ritirare' },
       { re: new RegExp(`(?:dobbiamo|devo|devono|bisogna)\\s+(?:andare\\s+a\\s+)?port(?:are|a|ano)\\s+(?:la\\s+|il\\s+|l[''']\\s*)?(${NAME})`), verb: 'portare' },
+      // Prima persona diretta: "porto Viola", "accompagno Asia", "prendo Viola"
+      { re: new RegExp(`\\bporto\\s+(?:la\\s+|il\\s+|l[''']\\s*)?(${NAME})`), verb: 'portare' },
+      { re: new RegExp(`\\baccompagno\\s+(?:la\\s+|il\\s+|l[''']\\s*)?(${NAME})`), verb: 'portare' },
+      { re: new RegExp(`\\bprendo\\s+(?:la\\s+|il\\s+|l[''']\\s*)?(${NAME})`), verb: 'prendere' },
+      { re: new RegExp(`\\briprendo\\s+(?:la\\s+|il\\s+|l[''']\\s*)?(${NAME})`), verb: 'riprendere' },
     ]
     for (const { re, verb } of collectivePickupPatterns) {
       const m = lower.match(re)
@@ -486,6 +492,27 @@ export function extractLogistics(text, members) {
         pickupBy = findMemberByName(m[1])
         if (pickupBy) { driver = pickupBy; actionVerb = verb; break }
       }
+    }
+  }
+
+  // ── Pattern "NAME [pronoun] va a riprendere/riprende" — name BEFORE verb, pronoun as object ──
+  // e.g. "chiara la va a riprendere", "papà lo riprende", "nonna le va a prendere"
+  if (!pickupBy && !driver) {
+    for (const mem of members) {
+      const allNames = [mem.name.toLowerCase(), ...(mem.aliases || []).map(a => a.toLowerCase())]
+      for (const pickupName of allNames) {
+        const nameIdx = lower.indexOf(pickupName)
+        if (nameIdx === -1) continue
+        const afterName = lower.substring(nameIdx + pickupName.length)
+        const pickupProRe = /^\s+(?:l[aoei]|li|le|ci)\s+(?:va\s+a\s+(?:riprendere|prendere)|(?:deve|devi|dovr[àa])\s+(?:andare\s+a\s+)?(?:riprendere|prendere)|riprende(?:rà)?|prende(?:rà)?|viene\s+a\s+(?:riprendere|prendere))/i
+        if (pickupProRe.test(afterName)) {
+          pickupBy = mem
+          driver = mem
+          actionVerb = 'riprendere'
+          break
+        }
+      }
+      if (pickupBy) break
     }
   }
 
