@@ -30,6 +30,7 @@ import {
 import { BOOTSTRAP_SYNAPSES } from './patterns.js'
 import { getTimeContext, computeSynapseActivations } from './synapseEngine.js'
 import { buildAction, guessCategoryFromSynapses, categoryFromActivity } from './actionBuilder.js'
+import { correctText } from './spellChecker.js'
 import { addSentenceTrace, isDebugEnabled } from './debugLogger.js'
 import { normalizeAndValidateActions } from './actionNormalizer.js'
 import { evaluateCommitPolicy } from './commitEvaluator.js'
@@ -158,7 +159,15 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     // ─── STRIP CONTEXT PREFIX for intent classification ───
     // "Tornando da lavoro, martedi facciamo frittata" → "martedi facciamo frittata"
     // Entities are already extracted from the full text above.
-    const cleanSentence = splitMergedWords(stripContextPrefix(sentence))
+    let cleanSentence = splitMergedWords(stripContextPrefix(sentence))
+
+    // ─── SPELL-CHECK: correct typos before intent classification ───
+    const { corrected: spellCorrected, corrections: spellCorrections } = correctText(cleanSentence, members.map(m => m.name))
+    if (spellCorrections.length > 0) {
+      cleanSentence = spellCorrected
+      if (debugTrace) debugTrace.spellCorrections = spellCorrections
+    }
+
     const lower = cleanSentence.toLowerCase()
     const tokens = tokenizeForMatching(cleanSentence)
     const stems = tokens.map(stemIT)
@@ -740,8 +749,10 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       new RegExp(`(?:colazione|merenda)\\s+con\\s+(?:i\\s+|le?\\s+|il\\s+)?(?:${PIATTI}|cornetti|pancake|biscotti|yogurt|cereali|latte|succo)`, 'i'),
       // "pensavo di fare + piatto" → meal proposal
       new RegExp(`(?:pensavo|penso)\\s+di\\s+(?:fare|preparare|cucinare)\\s+(?:le?\\s+|il\\s+|la\\s+|i\\s+|gli\\s+|un[oa]?\\s+)?(?:${PIATTI})`, 'i'),
-      // "domenica/per domenica preparo + piatto" → meal planning (not task)
-      new RegExp(`(?:domenica|sabato|per\\s+(?:domenica|sabato|domani))\\s+(?:preparo|cucino|faccio)\\s+(?:le?\\s+|il\\s+|la\\s+|i\\s+|gli\\s+|un[oa]?\\s+)?(?:${PIATTI})`, 'i'),
+      // "domenica/stasera/domani preparo + piatto" → meal planning (not task)
+      new RegExp(`(?:domenica|sabato|stasera|domani(?:\\s+sera)?|per\\s+(?:domenica|sabato|domani))\\s+(?:preparo|cucino|faccio|preparerò|cucinerò)\\s+(?:le?\\s+|il\\s+|la\\s+|i\\s+|gli\\s+|un[oa]?\\s+)?(?:${PIATTI})`, 'i'),
+      // "per domenica/stasera pensavo di fare + piatto con suffisso" (e.g. "arrosto con le patate", "ragù della domenica")
+      new RegExp(`(?:per\\s+)?(?:domenica|sabato|stasera|domani)\\s+(?:pensavo|penso)\\s+di\\s+(?:fare|preparare|cucinare)\\s+(?:le?\\s+|il\\s+|la\\s+|i\\s+|gli\\s+|un[oa]?\\s+)?(?:${PIATTI})`, 'i'),
       // "vi porto il ragù" → meal contribution (not logistics)
       new RegExp(`(?:vi\\s+porto|porto\\s+io)\\s+(?:il\\s+|la\\s+|le\\s+|i\\s+|lo\\s+)?(?:${PIATTI})`, 'i'),
     ]
@@ -806,7 +817,7 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       // "vado a/al/alla + luogo" con giorno esplicito
       /\bvado\s+(?:al|alla|all['']\s*|a)\s+\w+/i,
       // "ho + attività nota" — impegno personale
-      /\bho\s+(?:catechismo|danza|nuoto|pallavolo|basket|calcio|tennis|karate|palestra|allenamento|lezione|partita|gara|saggio|recita|corso|il\s+torneo)\b/i,
+      /\bho\s+(?:catechismo|danza|nuoto|pallavolo|basket|calcio|tennis|karate|palestra|allenamento|lezione|partita|gara|saggio|recita|corso|il\s+torneo|la\s+verifica|l['']\s*interrogazione|l['']\s*esame|il\s+compito\s+in\s+classe|il\s+colloquio)\b/i,
       // "andiamo a/al/da" — uscita di gruppo
       /\bandiamo\s+(?:al?|da[li]?|in)\s+/i,
       // "mi segni che..." — request to note something → calendar
@@ -1084,11 +1095,12 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     // NLP.js wrongly classifies "comprare tubi da giardino" as shopping.
     // If NLP says "shopping" but sentence has no grocery keywords → override to task.
     // Also flag for L2 synapse deboost below.
-    const _groceryCheckRe = /\b(?:pane|latte|uova|formaggio|burro|mozzarella|prosciutto|salame|mortadella|yogurt|farina|zucchero|olio|aceto|pannolini|nurofen|tachipirina|detersivo|sapone|shampoo|carta\s*igienica|biscotti|crackers|cereali|verdur[ae]|frutta|carne|pollo|pesce|riso|pasta(?!\s+(?:al|con|di\s+\w+\s+per)))\b/i
+    const _groceryCheckRe = /\b(?:pane|latte|uova|formaggio|parmigiano|grana|pecorino|ricotta|burro|mozzarella|prosciutto|salame|mortadella|yogurt|farina|zucchero|olio|aceto|sale|pepe|pannolini|nurofen|tachipirina|detersivo|sapone|shampoo|carta\s*igienica|biscotti|crackers|cereali|verdur[ae]|frutta|carne|pollo|pesce|riso|pasta(?!\s+(?:al|con|di\s+\w+\s+per))|marmellata|miele|nutella|tonno|salmone|insalata|pomodor[io]|patate|cipolle?|aglio|carote|zucchine|limoni?|arance?|banane?|mele)\b/i
     let _shoppingGuardFired = false
-    if (nlpType === 'shopping' && /\bcomprare?\b/i.test(lower) && !_groceryCheckRe.test(lower)
+    if (nlpType === 'shopping' && !_groceryCheckRe.test(lower)
         && !/\blista\s+(?:della\s+)?spesa\b/i.test(lower) && !/\bspesa\b/i.test(lower)) {
       // No grocery items, not "lista spesa" → this is an errand, not grocery shopping
+      // Applies to both "comprare" and "servono" without grocery context
       nlpType = 'task'
       _shoppingGuardFired = true
       if (debug) sentenceWarnings.push('nlp_shopping_to_task_no_grocery')

@@ -203,7 +203,7 @@ export function stripContextPrefix(sentence) {
 
 // ─── CONVERSATIONAL SUFFIX STRIPPER ─────────────────────────────
 // Strips trailing conversational fillers: "ok?", "che dici?", "va bene?", "dai", etc.
-const CONVERSATIONAL_SUFFIX_RE = /[,.]?\s*(?:ok\??|che (?:dici|dico|ne dici|ne pensi)\??|va bene\??|d'accordo\??|capito\??|eh\??|no\??|dai|si\??)\s*$/i
+const CONVERSATIONAL_SUFFIX_RE = /[,.]?\s*(?:ok\??|che (?:dici|dite|dico|ne dici|ne dite|ne pensi|ne pensate)\??|va bene\??|d'accordo\??|capito\??|eh\??|no\??|dai|si\??|niente di che|ho pensato che)\s*$/i
 
 export function stripConversationalSuffix(sentence) {
   const stripped = sentence.replace(CONVERSATIONAL_SUFFIX_RE, '')
