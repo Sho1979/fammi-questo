@@ -21,7 +21,7 @@
 import { db } from '../localDb.js'
 import { classify, isNlpReady } from '../brainNlp.js'
 import { NLP_CONFIDENCE_HIGH, NLP_CONFIDENCE_LOW, SYNAPSE_CONFIDENCE_THRESHOLD, SHADOW_CONFIRM_THRESHOLD } from './config.js'
-import { stemIT, tokenizeForMatching, splitSentences, isNegatedAction, isActionable, isPastTenseReport, stripContextPrefix } from './textUtils.js'
+import { stemIT, tokenizeForMatching, splitSentences, isNegatedAction, isActionable, isPastTenseReport, stripContextPrefix, splitMergedWords } from './textUtils.js'
 import {
   parseLocalDate, parseLocalTime, parseTimeRange,
   parseAmount, extractPersons, extractLogistics,
@@ -86,7 +86,7 @@ function resolveKeywordCategory(sentence, currentCategory) {
 export async function parseLocally(text, members = [], familyId = null, currentMember = null, debugTrace = null) {
   // Check if original text is a genuine question BEFORE splitSentences strips "?"
   // Exclude conversational tags: "ok?", "che dici?", "va bene?", "d'accordo?", "no?"
-  const CONVERSATIONAL_TAG_RE = /[,.]?\s*(?:ok|che (?:dici|ne dici|ne pensi)|va bene|d'accordo|capito|eh|no|dai|si)\s*\?\s*$/i
+  const CONVERSATIONAL_TAG_RE = /[,.]?\s*(?:ok|che (?:dici|dico|ne dici|ne pensi)|va bene|d'accordo|capito|eh|no|dai|si)\s*\?\s*$/i
   const _isOriginalQuestion = /\?\s*$/.test(text.trim()) && !CONVERSATIONAL_TAG_RE.test(text.trim())
   const sentences = splitSentences(text)
   const actions = []
@@ -158,7 +158,7 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     // ─── STRIP CONTEXT PREFIX for intent classification ───
     // "Tornando da lavoro, martedi facciamo frittata" → "martedi facciamo frittata"
     // Entities are already extracted from the full text above.
-    const cleanSentence = stripContextPrefix(sentence)
+    const cleanSentence = splitMergedWords(stripContextPrefix(sentence))
     const lower = cleanSentence.toLowerCase()
     const tokens = tokenizeForMatching(cleanSentence)
     const stems = tokens.map(stemIT)
@@ -250,7 +250,8 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     // ─── ACTIONABILITY FILTER: skip frasi senza intent azionabile ───
     // "ciao come stai" → skip. "Ho fame" → skip. "Asia ha preso 8" → skip.
     // Regola: se non c'è verbo d'azione, importo, o entità strutturata → no azione.
-    if (!isActionable(sentence) && amount === null) {
+    // Check on cleanSentence (after prefix stripping) — "ehi, sabato vado al..." should pass.
+    if (!isActionable(cleanSentence) && amount === null) {
       if (debug) {
         addSentenceTrace(debugTrace, {
           sentence, intent: 'not_actionable', confidence: 0, source: 'actionability_filter',
@@ -264,7 +265,7 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     // ─── PAST TENSE FILTER: skip frasi al passato che riportano, non comandano ───
     // "Stamattina ho portato Viola" → skip. "La pizza era buona" → skip.
     // Eccezione: "Ho speso 30 euro" → valid expense.
-    if (isPastTenseReport(sentence)) {
+    if (isPastTenseReport(cleanSentence)) {
       if (debug) {
         addSentenceTrace(debugTrace, {
           sentence, intent: 'past_tense', confidence: 0, source: 'past_tense_filter',
@@ -278,7 +279,7 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     // ─── NEGATION CHECK: skip frasi negate ("non comprare X", "niente spesa") ───
     // Eccezione: "ricordami di NON X" → la negazione è il contenuto del reminder, non l'intent
     const isReminderWithNegation = /^(?:ricordami|avvisami|ricordaci)\b/i.test(lower.trim())
-    if (isNegatedAction(sentence) && !isReminderWithNegation) {
+    if (isNegatedAction(cleanSentence) && !isReminderWithNegation) {
       if (debug) {
         addSentenceTrace(debugTrace, {
           sentence, intent: 'negated', confidence: 0.95, source: 'negation_filter',
@@ -810,6 +811,14 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       /\bandiamo\s+(?:al?|da[li]?|in)\s+/i,
       // "mi segni che..." — request to note something → calendar
       /^mi\s+segni?\s+che\s+/i,
+      // "a prendere [nome]" — pickup person (colloquial, no article = person, not object)
+      // "A prendere Enma" = pickup, NOT "a prendere il latte" (has article = shopping)
+      /^a\s+prendere\s+(?!(?:il|lo|la|le|li|gli|un|una|uno|dei|delle|degli)\s)/i,
+      // Inverted: "al [place] ... vado" — "going to [place]" with verb at end (colloquial Italian)
+      // "Al ferramenta per la spesa sabato mattina vado" = scheduling a trip
+      /^(?:al|alla|all['']\s*)\s+\w+.*\bvado\s*$/i,
+      // "passo a prendere [person]" — pickup logistics
+      /\bpasso\s+a\s+prendere\s+/i,
     ]
     const isSocialPersonal = socialPersonalPatterns.some(re => re.test(lower))
     const hasDateContext = date !== todayStrEarly || /\b(?:domani|dopodomani|luned[iì]|marted[iì]|mercoled[iì]|gioved[iì]|venerd[iì]|sabato|domenica)\b/i.test(lower)
@@ -1071,6 +1080,20 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       if (debug) sentenceWarnings.push('nlp_confidence_capped_short')
     }
 
+    // ─── NLP SHOPPING GUARD: "comprare" + non-grocery items = errand/task ───
+    // NLP.js wrongly classifies "comprare tubi da giardino" as shopping.
+    // If NLP says "shopping" but sentence has no grocery keywords → override to task.
+    // Also flag for L2 synapse deboost below.
+    const _groceryCheckRe = /\b(?:pane|latte|uova|formaggio|burro|mozzarella|prosciutto|salame|mortadella|yogurt|farina|zucchero|olio|aceto|pannolini|nurofen|tachipirina|detersivo|sapone|shampoo|carta\s*igienica|biscotti|crackers|cereali|verdur[ae]|frutta|carne|pollo|pesce|riso|pasta(?!\s+(?:al|con|di\s+\w+\s+per)))\b/i
+    let _shoppingGuardFired = false
+    if (nlpType === 'shopping' && /\bcomprare?\b/i.test(lower) && !_groceryCheckRe.test(lower)
+        && !/\blista\s+(?:della\s+)?spesa\b/i.test(lower) && !/\bspesa\b/i.test(lower)) {
+      // No grocery items, not "lista spesa" → this is an errand, not grocery shopping
+      nlpType = 'task'
+      _shoppingGuardFired = true
+      if (debug) sentenceWarnings.push('nlp_shopping_to_task_no_grocery')
+    }
+
     // ─── L2: Sinapsi pesate ───
     const activations = computeSynapseActivations(tokens, stems, allSynapses)
 
@@ -1089,6 +1112,17 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       // De-boost meal
       const mealAct = activations.get('meal')
       if (mealAct) mealAct.score *= 0.4
+    }
+
+    // De-boost shopping synapse when NLP shopping guard fired (comprare + no grocery)
+    if (_shoppingGuardFired) {
+      const shopAct = activations.get('shopping')
+      if (shopAct) shopAct.score *= 0.1
+      // Boost task synapse to ensure correct final decision
+      if (!activations.has('task')) {
+        activations.set('task', { score: 0, keywords: [], categories: new Map() })
+      }
+      activations.get('task').score += 0.5
     }
 
     // Boost strutturale: persona + orario/giorno = calendario

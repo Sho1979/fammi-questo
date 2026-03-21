@@ -203,12 +203,31 @@ export function stripContextPrefix(sentence) {
 
 // ─── CONVERSATIONAL SUFFIX STRIPPER ─────────────────────────────
 // Strips trailing conversational fillers: "ok?", "che dici?", "va bene?", "dai", etc.
-const CONVERSATIONAL_SUFFIX_RE = /[,.]?\s*(?:ok\??|che (?:dici|ne dici|ne pensi)\??|va bene\??|d'accordo\??|capito\??|eh\??|no\??|dai|si\??)\s*$/i
+const CONVERSATIONAL_SUFFIX_RE = /[,.]?\s*(?:ok\??|che (?:dici|dico|ne dici|ne pensi)\??|va bene\??|d'accordo\??|capito\??|eh\??|no\??|dai|si\??)\s*$/i
 
 export function stripConversationalSuffix(sentence) {
   const stripped = sentence.replace(CONVERSATIONAL_SUFFIX_RE, '')
   if (stripped.length < 5) return sentence
   return stripped
+}
+
+// ─── MERGED WORD SPLITTER ─────────────────────────────────────────
+// Italian colloquial speech often merges small words with the next:
+//   "hodanza" → "ho danza", "adormire" → "a dormire"
+// Applied early in parsing to normalize text before NLP classification.
+const MERGED_WORD_FIXES = [
+  // "ho" + activity: hodanza, holezione, honuoto, hocalcio, etc.
+  [/\bho(danza|lezione|nuoto|calcio|palestra|catechismo|basket|tennis|karate|allenamento|ginnastica|partita|gara|saggio|corso)\b/gi, 'ho $1'],
+  // "a" + infinitive: adormire, aprendere, afare, agiocare
+  [/\ba(dormire|prendere|portare|fare|giocare|mangiare|comprare|andare)\b/gi, 'a $1'],
+]
+
+export function splitMergedWords(text) {
+  let result = text
+  for (const [re, replacement] of MERGED_WORD_FIXES) {
+    result = result.replace(re, replacement)
+  }
+  return result
 }
 
 // Single word that is clearly not a command (too ambiguous alone)

@@ -214,7 +214,10 @@ async function main() {
         agent: e.agent,
       }))
       const fs = await import('fs')
-      fs.writeFileSync(`neuroloop/logs/_errors_loop${loopIndex}.json`, JSON.stringify(errorDump, null, 2))
+      const path = await import('path')
+      const logsDir = path.join(import.meta.dirname, 'neuroloop', 'logs')
+      fs.mkdirSync(logsDir, { recursive: true })
+      fs.writeFileSync(path.join(logsDir, `_errors_loop${loopIndex}.json`), JSON.stringify(errorDump, null, 2))
     }
 
     // ── 3. ANALYZE ──────────────────────────────────
