@@ -2,10 +2,33 @@
  * STEP 4.6 — Tests for Wizard steps and SetupWizard completion logic.
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import { expect as vitestExpect } from 'vitest'
 import * as matchers from '@testing-library/jest-dom/matchers'
+
+vi.mock('../../lib/sync.js', () => ({
+  joinFamilyByCode: vi.fn(),
+}))
+
+vi.mock('../../lib/localDb.js', () => ({
+  db: {
+    members: {
+      where: vi.fn(() => ({
+        equals: vi.fn(() => ({
+          toArray: vi.fn(() => Promise.resolve([
+            { id: 'c1', name: 'Luca', role: 'child', access_level: 'basic', icon: '👦', color: '#FF9800', family_id: 'f1', pin_hash: 'xxx', _deleted: false, _version: 1 },
+            { id: 'c2', name: 'Sara', role: 'child', access_level: 'basic', icon: '👧', color: '#E91E63', family_id: 'f1', pin_hash: 'yyy', _deleted: false, _version: 1 },
+            { id: 'p1', name: 'Papà', role: 'parent', access_level: 'full', icon: '👨', color: '#4A90D9', family_id: 'f1', pin_hash: 'zzz', _deleted: false, _version: 1 },
+          ])),
+        })),
+      })),
+    },
+  },
+}))
+
+import { joinFamilyByCode } from '../../lib/sync.js'
+import { db } from '../../lib/localDb.js'
 
 vitestExpect.extend(matchers)
 
@@ -132,14 +155,6 @@ describe('WizardStep3', () => {
       <WizardStep3 data={parentData} onUpdate={() => {}} onNext={() => {}} onBack={() => {}} />
     )
     expect(container.textContent).toContain('Quanti genitori?')
-  })
-
-  it('shows child flow message for child role', () => {
-    const childData = { ...parentData, ownerRole: 'child' }
-    const { container } = render(
-      <WizardStep3 data={childData} onUpdate={() => {}} onNext={() => {}} onBack={() => {}} />
-    )
-    expect(container.textContent).toContain('Accedi alla tua famiglia')
   })
 
   it('shows children section when hasChildren is true', () => {
@@ -286,5 +301,177 @@ describe('WizardStep4', () => {
     fireEvent.change(inputs[0], { target: { value: 'abc123def456' } })
     // Should strip letters, keep only digits, max 6
     expect(onUpdate).toHaveBeenCalledWith({ parentPin: '123456' })
+  })
+})
+
+// ===== WizardStep3 — Child Join Flow =====
+
+describe('WizardStep3 — child join flow', () => {
+  const childData = {
+    ownerRole: 'child',
+    ownerName: 'Luca',
+    parents: [],
+    hasChildren: false,
+    children: [],
+  }
+
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    // Re-set the default mock for db.members.where
+    db.members.where.mockReturnValue({
+      equals: vi.fn(() => ({
+        toArray: vi.fn(() => Promise.resolve([
+          { id: 'c1', name: 'Luca', role: 'child', access_level: 'basic', icon: '👦', color: '#FF9800', family_id: 'f1', pin_hash: 'xxx', _deleted: false, _version: 1 },
+          { id: 'c2', name: 'Sara', role: 'child', access_level: 'basic', icon: '👧', color: '#E91E63', family_id: 'f1', pin_hash: 'yyy', _deleted: false, _version: 1 },
+          { id: 'p1', name: 'Papà', role: 'parent', access_level: 'full', icon: '👨', color: '#4A90D9', family_id: 'f1', pin_hash: 'zzz', _deleted: false, _version: 1 },
+        ])),
+      })),
+    })
+  })
+
+  it('renders invite code input for child role', () => {
+    const { container } = render(
+      <WizardStep3 data={childData} onUpdate={() => {}} onNext={() => {}} onBack={() => {}} />
+    )
+    expect(container.textContent).toContain('Codice invito')
+    const input = container.querySelector('input[type="text"]')
+    expect(input).not.toBeNull()
+  })
+
+  it('shows error for empty code submission', async () => {
+    const { container } = render(
+      <WizardStep3 data={childData} onUpdate={() => {}} onNext={() => {}} onBack={() => {}} />
+    )
+    const joinBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Unisciti'))
+    fireEvent.click(joinBtn)
+    await waitFor(() => {
+      expect(container.textContent).toContain('Inserisci il codice')
+    })
+  })
+
+  it('shows error for code too short', async () => {
+    const { container } = render(
+      <WizardStep3 data={childData} onUpdate={() => {}} onNext={() => {}} onBack={() => {}} />
+    )
+    const input = container.querySelector('input[type="text"]')
+    fireEvent.change(input, { target: { value: 'AB' } })
+    const joinBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Unisciti'))
+    fireEvent.click(joinBtn)
+    await waitFor(() => {
+      expect(container.textContent).toContain('Il codice deve essere di 6 caratteri')
+    })
+  })
+
+  it('calls joinFamilyByCode and shows child members on success', async () => {
+    joinFamilyByCode.mockResolvedValue({ id: 'f1', name: 'Famiglia Test' })
+
+    const { container } = render(
+      <WizardStep3 data={childData} onUpdate={() => {}} onNext={() => {}} onBack={() => {}} />
+    )
+    const input = container.querySelector('input[type="text"]')
+    fireEvent.change(input, { target: { value: 'A3B7K9' } })
+    const joinBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Unisciti'))
+    fireEvent.click(joinBtn)
+
+    await waitFor(() => {
+      expect(container.textContent).toContain('Luca')
+      expect(container.textContent).toContain('Sara')
+      // Should NOT show parent
+      expect(container.textContent).not.toContain('Papà')
+    })
+  })
+
+  it('shows error when joinFamilyByCode fails', async () => {
+    joinFamilyByCode.mockRejectedValue(new Error('Codice non valido'))
+
+    const { container } = render(
+      <WizardStep3 data={childData} onUpdate={() => {}} onNext={() => {}} onBack={() => {}} />
+    )
+    const input = container.querySelector('input[type="text"]')
+    fireEvent.change(input, { target: { value: 'XXXXXX' } })
+    const joinBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Unisciti'))
+    fireEvent.click(joinBtn)
+
+    await waitFor(() => {
+      expect(container.textContent).toContain('Codice non valido')
+    })
+  })
+
+  it('calls onNext with familyId and mapped member when child selected', async () => {
+    joinFamilyByCode.mockResolvedValue({ id: 'f1', name: 'Famiglia Test' })
+    const onNext = vi.fn()
+
+    const { container } = render(
+      <WizardStep3 data={childData} onUpdate={() => {}} onNext={onNext} onBack={() => {}} />
+    )
+    const input = container.querySelector('input[type="text"]')
+    fireEvent.change(input, { target: { value: 'A3B7K9' } })
+    const joinBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Unisciti'))
+    fireEvent.click(joinBtn)
+
+    await waitFor(() => {
+      expect(container.textContent).toContain('Luca')
+    })
+
+    // Select Luca
+    const lucaBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Luca'))
+    fireEvent.click(lucaBtn)
+
+    // Confirm
+    const confirmBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Conferma'))
+    fireEvent.click(confirmBtn)
+
+    expect(onNext).toHaveBeenCalledWith({
+      familyId: 'f1',
+      selectedMember: { id: 'c1', name: 'Luca', role: 'child', access_level: 'basic', icon: '👦', color: '#FF9800' },
+    })
+  })
+
+  it('shows no-children message when family has no child members', async () => {
+    joinFamilyByCode.mockResolvedValue({ id: 'f1', name: 'Famiglia Test' })
+    // Override mock to return only adults
+    db.members.where.mockReturnValue({
+      equals: vi.fn(() => ({
+        toArray: vi.fn(() => Promise.resolve([
+          { id: 'p1', name: 'Papà', role: 'parent', access_level: 'full', icon: '👨', color: '#4A90D9' },
+        ])),
+      })),
+    })
+
+    const { container } = render(
+      <WizardStep3 data={childData} onUpdate={() => {}} onNext={() => {}} onBack={() => {}} />
+    )
+    const input = container.querySelector('input[type="text"]')
+    fireEvent.change(input, { target: { value: 'A3B7K9' } })
+    const joinBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Unisciti'))
+    fireEvent.click(joinBtn)
+
+    await waitFor(() => {
+      expect(container.textContent).toContain('Nessun figlio configurato')
+    })
+  })
+
+  it('shows encrypted family error when member names look encrypted', async () => {
+    joinFamilyByCode.mockResolvedValue({ id: 'f1', name: 'Famiglia Test' })
+    // Encrypted names are base64 strings
+    db.members.where.mockReturnValue({
+      equals: vi.fn(() => ({
+        toArray: vi.fn(() => Promise.resolve([
+          { id: 'c1', name: 'dGVzdCBlbmNyeXB0ZWQ=', role: 'child', access_level: 'basic', icon: '👦', color: '#FF9800' },
+        ])),
+      })),
+    })
+
+    const { container } = render(
+      <WizardStep3 data={childData} onUpdate={() => {}} onNext={() => {}} onBack={() => {}} />
+    )
+    const input = container.querySelector('input[type="text"]')
+    fireEvent.change(input, { target: { value: 'A3B7K9' } })
+    const joinBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Unisciti'))
+    fireEvent.click(joinBtn)
+
+    await waitFor(() => {
+      expect(container.textContent).toContain('sincronizzazione crittografata')
+    })
   })
 })

@@ -39,7 +39,7 @@ const TOTAL_STEPS = 7
 
 export default function SetupWizard() {
   const navigate = useNavigate()
-  const { setFamily, completeSetup, setOwnerName } = useAuthStore()
+  const { setFamily, setMember, completeSetup, setOwnerName } = useAuthStore()
 
   const [step, setStep] = useState(1)
   const [saving, setSaving] = useState(false)
@@ -71,6 +71,17 @@ export default function SetupWizard() {
 
   const goNext = () => setStep((s) => Math.min(s + 1, TOTAL_STEPS))
   const goBack = () => setStep((s) => Math.max(s - 1, 1))
+
+  /**
+   * Child join flow — skips steps 4–7.
+   * Called by WizardStep3 when child selects their profile.
+   */
+  const handleChildJoinComplete = ({ familyId, selectedMember }) => {
+    setFamily(familyId)
+    setMember(selectedMember)
+    completeSetup()
+    navigate('/login', { replace: true })
+  }
 
   /**
    * Final completion logic — writes everything to Dexie + optional cloud.
@@ -199,7 +210,12 @@ export default function SetupWizard() {
           <WizardStep2 data={data} onUpdate={updateData} onNext={goNext} onBack={goBack} />
         )}
         {step === 3 && (
-          <WizardStep3 data={data} onUpdate={updateData} onNext={goNext} onBack={goBack} />
+          <WizardStep3
+            data={data}
+            onUpdate={updateData}
+            onNext={data.ownerRole === 'child' ? handleChildJoinComplete : goNext}
+            onBack={goBack}
+          />
         )}
         {step === 4 && (
           <WizardStep4 data={data} onUpdate={updateData} onNext={goNext} onBack={goBack} />
