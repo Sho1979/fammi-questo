@@ -1,0 +1,1355 @@
+{
+  "version": 2,
+  "type": "orchestrator",
+  "generatedAt": "2026-03-21T14:26:29.291Z",
+  "totalTrajectories": 214,
+  "pipelineAccuracy": {
+    "total": 214,
+    "intentAccuracy": 0.8598,
+    "tableAccuracy": 0.6963,
+    "writeRate": 0.8056,
+    "qualityRate": 0.8734,
+    "perTable": {
+      "events": {
+        "total": 140,
+        "intentCorrect": 138,
+        "written": 113,
+        "qualityValid": 96
+      },
+      "tasks": {
+        "total": 27,
+        "intentCorrect": 7,
+        "written": 20,
+        "qualityValid": 17
+      },
+      "expenses": {
+        "total": 13,
+        "intentCorrect": 9,
+        "written": 12,
+        "qualityValid": 12
+      },
+      "shoppingItems": {
+        "total": 2,
+        "intentCorrect": 0,
+        "written": 2,
+        "qualityValid": 2
+      },
+      "mealPlans": {
+        "total": 11,
+        "intentCorrect": 9,
+        "written": 11,
+        "qualityValid": 11
+      },
+      "none": {
+        "total": 21,
+        "intentCorrect": 21,
+        "written": 0,
+        "qualityValid": 0
+      }
+    },
+    "commitLevelDistribution": {
+      "strong": 68,
+      "light": 84,
+      "draft": 26,
+      "none": 8,
+      "missing": 28
+    }
+  },
+  "recordQualityAudit": {
+    "totalRecordsWritten": 158,
+    "perTable": {
+      "events": {
+        "total": 124,
+        "valid": 104,
+        "invalid": 20,
+        "missingRequiredCounts": {
+          "date": 20
+        },
+        "missingRecommendedCounts": {
+          "timeStart": 76
+        },
+        "warningCounts": {}
+      },
+      "expenses": {
+        "total": 9,
+        "valid": 9,
+        "invalid": 0,
+        "missingRequiredCounts": {},
+        "missingRecommendedCounts": {},
+        "warningCounts": {}
+      },
+      "shoppingItems": {
+        "total": 4,
+        "valid": 4,
+        "invalid": 0,
+        "missingRequiredCounts": {},
+        "missingRecommendedCounts": {},
+        "warningCounts": {}
+      },
+      "tasks": {
+        "total": 12,
+        "valid": 12,
+        "invalid": 0,
+        "missingRequiredCounts": {},
+        "missingRecommendedCounts": {
+          "assignedToId": 8,
+          "dueDate": 1
+        },
+        "warningCounts": {}
+      },
+      "mealPlans": {
+        "total": 9,
+        "valid": 9,
+        "invalid": 0,
+        "missingRequiredCounts": {},
+        "missingRecommendedCounts": {},
+        "warningCounts": {}
+      }
+    },
+    "topWarnings": []
+  },
+  "roleViews": {
+    "genitore": {
+      "label": "Genitore (full access)",
+      "totalVisible": 158,
+      "totalHidden": 0,
+      "perTable": {
+        "events": 124,
+        "expenses": 9,
+        "shoppingItems": 4,
+        "tasks": 12,
+        "mealPlans": 9
+      }
+    },
+    "figlio": {
+      "label": "Figlio (limited)",
+      "totalVisible": 145,
+      "totalHidden": 13,
+      "perTable": {
+        "events": 124,
+        "tasks": 12,
+        "mealPlans": 9
+      }
+    },
+    "nonno": {
+      "label": "Nonno (shared)",
+      "totalVisible": 149,
+      "totalHidden": 9,
+      "perTable": {
+        "events": 124,
+        "shoppingItems": 4,
+        "tasks": 12,
+        "mealPlans": 9
+      }
+    }
+  },
+  "perAgentSummary": {
+    "Cristian": {
+      "role": "genitore",
+      "total": 54,
+      "correct": 46,
+      "written": 33,
+      "qualityValid": 28,
+      "intents": {
+        "calendar": 37,
+        "task": 5,
+        "noise": 2,
+        "edit_action": 9,
+        "meal": 1
+      },
+      "tables": {
+        "events": 30,
+        "shoppingItems": 3
+      },
+      "errors": [
+        {
+          "text": "Dobbiamo decidere chi porta le bambine lunedi",
+          "expected": "task",
+          "got": "calendar",
+          "errorType": "parse_error"
+        },
+        {
+          "text": "Dobbiamo decidere chi porta le bambine lunedi",
+          "expected": "task",
+          "got": "calendar",
+          "errorType": "parse_error"
+        },
+        {
+          "text": "Passo io a comprarlo domani",
+          "expected": "noise",
+          "got": "shopping",
+          "errorType": "parse_error"
+        },
+        {
+          "text": "Passo io a comprarlo domani",
+          "expected": "noise",
+          "got": "shopping",
+          "errorType": "parse_error"
+        },
+        {
+          "text": "Devo comprare le scarpette da danza nuove per Viola",
+          "expected": "task",
+          "got": "shopping",
+          "errorType": "parse_error"
+        }
+      ],
+      "accuracy": 0.8519
+    },
+    "Chiara": {
+      "role": "genitore",
+      "total": 75,
+      "correct": 63,
+      "written": 53,
+      "qualityValid": 47,
+      "intents": {
+        "task": 5,
+        "compound": 11,
+        "expense": 8,
+        "calendar": 37,
+        "meal": 2,
+        "edit_action": 12
+      },
+      "tables": {
+        "events": 39,
+        "expenses": 7,
+        "shoppingItems": 1,
+        "mealPlans": 1,
+        "tasks": 5
+      },
+      "errors": [
+        {
+          "text": "Devo comprare i libri di scuola per Viola e Asia",
+          "expected": "task",
+          "got": "shopping",
+          "errorType": "parse_error"
+        },
+        {
+          "text": "Ho preso zaini e quaderni, 95 euro",
+          "expected": "expense",
+          "got": "none",
+          "errorType": "parse_error"
+        },
+        {
+          "text": "Devo comprare i libri di scuola per Viola e Asia",
+          "expected": "task",
+          "got": "shopping",
+          "errorType": "parse_error"
+        },
+        {
+          "text": "Asia ha bisogno dello zaino nuovo",
+          "expected": "task",
+          "got": "calendar",
+          "errorType": "parse_error"
+        },
+        {
+          "text": "Asia ha bisogno dello zaino nuovo",
+          "expected": "task",
+          "got": "calendar",
+          "errorType": "parse_error"
+        }
+      ],
+      "accuracy": 0.84
+    },
+    "Asia": {
+      "role": "figlio",
+      "total": 27,
+      "correct": 23,
+      "written": 20,
+      "qualityValid": 13,
+      "intents": {
+        "calendar": 23,
+        "task": 4
+      },
+      "tables": {
+        "events": 20
+      },
+      "errors": [
+        {
+          "text": "Mamma mi ha detto di mettere in ordine",
+          "expected": "task",
+          "got": "calendar",
+          "errorType": "parse_error"
+        },
+        {
+          "text": "Mamma mi ha detto di rifare il letto",
+          "expected": "task",
+          "got": "calendar",
+          "errorType": "parse_error"
+        },
+        {
+          "text": "Mamma mi ha detto di rifare il letto",
+          "expected": "task",
+          "got": "calendar",
+          "errorType": "parse_error"
+        },
+        {
+          "text": "Mamma mi ha detto di rifare il letto",
+          "expected": "task",
+          "got": "calendar",
+          "errorType": "parse_error"
+        }
+      ],
+      "accuracy": 0.8519
+    },
+    "Viola": {
+      "role": "figlio",
+      "total": 40,
+      "correct": 37,
+      "written": 37,
+      "qualityValid": 35,
+      "intents": {
+        "calendar": 30,
+        "task": 9,
+        "reminder": 1
+      },
+      "tables": {
+        "events": 30,
+        "tasks": 7
+      },
+      "errors": [
+        {
+          "text": "Mi servono le scarpe da studio per giovedi",
+          "expected": "task",
+          "got": "shopping",
+          "errorType": "parse_error"
+        },
+        {
+          "text": "Mi servono le scarpe da studio per venerdi",
+          "expected": "task",
+          "got": "none",
+          "errorType": "parse_error"
+        },
+        {
+          "text": "Mi servono le scarpe da danza per mercoledi",
+          "expected": "task",
+          "got": "calendar",
+          "errorType": "parse_error"
+        }
+      ],
+      "accuracy": 0.925
+    },
+    "Mariangela": {
+      "role": "nonno",
+      "total": 13,
+      "correct": 13,
+      "written": 13,
+      "qualityValid": 13,
+      "intents": {
+        "calendar": 4,
+        "expense": 1,
+        "meal": 8
+      },
+      "tables": {
+        "events": 4,
+        "expenses": 1,
+        "mealPlans": 8
+      },
+      "errors": [],
+      "accuracy": 1
+    },
+    "Roberto": {
+      "role": "nonno",
+      "total": 5,
+      "correct": 2,
+      "written": 2,
+      "qualityValid": 2,
+      "intents": {
+        "task": 2,
+        "calendar": 2,
+        "expense": 1
+      },
+      "tables": {
+        "events": 1,
+        "expenses": 1
+      },
+      "errors": [
+        {
+          "text": "Devo andare al mercato a comprare vernice bianca per la mens",
+          "expected": "task",
+          "got": "shopping",
+          "errorType": "parse_error"
+        },
+        {
+          "text": "Vengo io a casa vostra nel pomeriggio",
+          "expected": "calendar",
+          "got": "none",
+          "errorType": "parse_error"
+        },
+        {
+          "text": "Devo andare al mercato a comprare tubi da giardino per la se",
+          "expected": "task",
+          "got": "shopping",
+          "errorType": "parse_error"
+        }
+      ],
+      "accuracy": 0.4
+    }
+  },
+  "problemPhrases": {
+    "totalProblems": 93,
+    "top30": [
+      {
+        "text": "Devo comprare i libri di scuola per Viola e Asia",
+        "agent": "Chiara",
+        "agentRole": "genitore",
+        "date": "2025-09-01",
+        "expectedIntent": "task",
+        "actualIntent": "shopping",
+        "confidence": 0.772919641695748,
+        "expectedTable": "tasks",
+        "actualTable": "shoppingItems",
+        "recordWritten": false,
+        "issues": [
+          "intent: expected task, got shopping",
+          "table: expected tasks, got shoppingItems",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Ho preso zaini e quaderni, 95 euro",
+        "agent": "Chiara",
+        "agentRole": "genitore",
+        "date": "2025-09-02",
+        "expectedIntent": "expense",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "expenses",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "intent: expected expense, got none",
+          "table: expected expenses, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Devo andare al mercato a comprare vernice bianca per la mensola",
+        "agent": "Roberto",
+        "agentRole": "nonno",
+        "date": "2025-09-06",
+        "expectedIntent": "task",
+        "actualIntent": "shopping",
+        "confidence": 0.8467597286737787,
+        "expectedTable": "tasks",
+        "actualTable": "shoppingItems",
+        "recordWritten": false,
+        "issues": [
+          "intent: expected task, got shopping",
+          "table: expected tasks, got shoppingItems",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Devo comprare le scarpette da danza nuove per Viola",
+        "agent": "Cristian",
+        "agentRole": "genitore",
+        "date": "2025-09-15",
+        "expectedIntent": "task",
+        "actualIntent": "shopping",
+        "confidence": 0.772919641695748,
+        "expectedTable": "tasks",
+        "actualTable": "shoppingItems",
+        "recordWritten": false,
+        "issues": [
+          "intent: expected task, got shopping",
+          "table: expected tasks, got shoppingItems",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Devo comprare le scarpette da danza nuove per Viola",
+        "agent": "Cristian",
+        "agentRole": "genitore",
+        "date": "2025-09-16",
+        "expectedIntent": "task",
+        "actualIntent": "shopping",
+        "confidence": 0.772919641695748,
+        "expectedTable": "tasks",
+        "actualTable": "shoppingItems",
+        "recordWritten": false,
+        "issues": [
+          "intent: expected task, got shopping",
+          "table: expected tasks, got shoppingItems",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Mi servono le scarpe da studio per giovedi",
+        "agent": "Viola",
+        "agentRole": "figlio",
+        "date": "2025-09-17",
+        "expectedIntent": "task",
+        "actualIntent": "shopping",
+        "confidence": 0.5531444946380928,
+        "expectedTable": "tasks",
+        "actualTable": "shoppingItems",
+        "recordWritten": false,
+        "issues": [
+          "intent: expected task, got shopping",
+          "table: expected tasks, got shoppingItems",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Chi va a prendere Viola oggi",
+        "agent": "Chiara",
+        "agentRole": "genitore",
+        "date": "2025-09-17",
+        "expectedIntent": "calendar",
+        "actualIntent": "task",
+        "confidence": 0.5383234672769576,
+        "expectedTable": "events",
+        "actualTable": "tasks",
+        "recordWritten": false,
+        "issues": [
+          "intent: expected calendar, got task",
+          "table: expected events, got tasks",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Mi servono le scarpe da studio per venerdi",
+        "agent": "Viola",
+        "agentRole": "figlio",
+        "date": "2025-09-19",
+        "expectedIntent": "task",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "tasks",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "intent: expected task, got none",
+          "table: expected tasks, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Vengo io a casa vostra nel pomeriggio",
+        "agent": "Roberto",
+        "agentRole": "nonno",
+        "date": "2025-09-22",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "intent: expected calendar, got none",
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Devo andare al mercato a comprare tubi da giardino per la serratura",
+        "agent": "Roberto",
+        "agentRole": "nonno",
+        "date": "2025-09-27",
+        "expectedIntent": "task",
+        "actualIntent": "shopping",
+        "confidence": 0.7941889748764203,
+        "expectedTable": "tasks",
+        "actualTable": "shoppingItems",
+        "recordWritten": false,
+        "issues": [
+          "intent: expected task, got shopping",
+          "table: expected tasks, got shoppingItems",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Domani nuoto?",
+        "agent": "Asia",
+        "agentRole": "figlio",
+        "date": "2025-09-02",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Forse martedi non riesco a prendere Asia, vediamo come ci organizziamo",
+        "agent": "Chiara",
+        "agentRole": "genitore",
+        "date": "2025-09-02",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Domani forse porto io Roberto",
+        "agent": "Cristian",
+        "agentRole": "genitore",
+        "date": "2025-09-03",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Devo pensarci bene prima di prenotare dal ortopedico",
+        "agent": "Chiara",
+        "agentRole": "genitore",
+        "date": "2025-09-04",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Domani nuoto?",
+        "agent": "Asia",
+        "agentRole": "figlio",
+        "date": "2025-09-04",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Domani forse porto io Viola",
+        "agent": "Cristian",
+        "agentRole": "genitore",
+        "date": "2025-09-05",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Forse domenica non riesco a prendere Asia, vediamo come ci organizziamo",
+        "agent": "Chiara",
+        "agentRole": "genitore",
+        "date": "2025-09-05",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Domani nuoto?",
+        "agent": "Asia",
+        "agentRole": "figlio",
+        "date": "2025-09-06",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Mamma mi ha detto di rifare il letto",
+        "agent": "Asia",
+        "agentRole": "figlio",
+        "date": "2025-09-08",
+        "expectedIntent": "task",
+        "actualIntent": "calendar",
+        "confidence": 0.9205904462652907,
+        "expectedTable": "tasks",
+        "actualTable": "events",
+        "recordWritten": true,
+        "issues": [
+          "intent: expected task, got calendar",
+          "table: expected tasks, got events",
+          "missing required: date"
+        ],
+        "recordSnapshot": {
+          "type": "calendar",
+          "source": "L0",
+          "confidence": 0.9205904462652907,
+          "textOriginal": "Mamma mi ha detto di rifare il letto",
+          "familyId": "sim-family-001",
+          "createdBy": "sim-asia",
+          "needsConfirm": false,
+          "incomplete": "Manca l'orario",
+          "warnings": [
+            "calendar: date missing (will be evaluated by commit policy)",
+            "calendar: timeStart is null (manca orario)"
+          ],
+          "meta": {
+            "utteranceRef": "u_20250908_26mo5l",
+            "actionRef": "a_0",
+            "pipelinePath": "",
+            "draftId": null,
+            "usedAI": false
+          },
+          "title": "Mamma mi ha detto di rifare il letto",
+          "date": null,
+          "timeStart": null,
+          "timeEnd": null,
+          "personIds": [
+            "sim-chiara"
+          ],
+          "personNames": [
+            "Chiara"
+          ],
+          "location": null,
+          "activity": null,
+          "category": "sport",
+          "isAbsence": false,
+          "logistics": null,
+          "commit": {
+            "level": "draft",
+            "previewType": "draft_event",
+            "writePolicy": "draft_only",
+            "missingFields": [
+              "date",
+              "timeStart"
+            ],
+            "reasonCodes": [
+              "NO_TEMPORAL_CONTEXT",
+              "EVALUATED_POST_NORMALIZE"
+            ],
+            "uiBadges": [
+              "Bozza — manca quando"
+            ],
+            "canConfirm": true,
+            "canWrite": false
+          },
+          "family_id": "sim-family-001",
+          "id": "sim-1757325600000-qsydc6"
+        },
+        "qualityWarnings": []
+      },
+      {
+        "text": "Domani nuoto?",
+        "agent": "Asia",
+        "agentRole": "figlio",
+        "date": "2025-09-11",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Domani forse porto io Viola",
+        "agent": "Cristian",
+        "agentRole": "genitore",
+        "date": "2025-09-11",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Devo pensarci bene prima di prenotare dal dentista",
+        "agent": "Chiara",
+        "agentRole": "genitore",
+        "date": "2025-09-11",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Asia ha bisogno dello zaino nuovo",
+        "agent": "Chiara",
+        "agentRole": "genitore",
+        "date": "2025-09-11",
+        "expectedIntent": "task",
+        "actualIntent": "calendar",
+        "confidence": 0.6015274467900056,
+        "expectedTable": "tasks",
+        "actualTable": "events",
+        "recordWritten": true,
+        "issues": [
+          "intent: expected task, got calendar",
+          "table: expected tasks, got events",
+          "missing required: date"
+        ],
+        "recordSnapshot": {
+          "type": "calendar",
+          "source": "L0",
+          "confidence": 0.6015274467900056,
+          "textOriginal": "Asia ha bisogno dello zaino nuovo",
+          "familyId": "sim-family-001",
+          "createdBy": "sim-chiara",
+          "needsConfirm": false,
+          "incomplete": "Manca l'orario",
+          "warnings": [
+            "calendar: date missing (will be evaluated by commit policy)",
+            "calendar: timeStart is null (manca orario)"
+          ],
+          "meta": {
+            "utteranceRef": "u_20250911_5oa0st",
+            "actionRef": "a_0",
+            "pipelinePath": "",
+            "draftId": null,
+            "usedAI": false
+          },
+          "title": "Ha bisogno dello zaino nuovo",
+          "date": null,
+          "timeStart": null,
+          "timeEnd": null,
+          "personIds": [
+            "sim-asia"
+          ],
+          "personNames": [
+            "Asia"
+          ],
+          "location": null,
+          "activity": null,
+          "category": "sport",
+          "isAbsence": false,
+          "logistics": null,
+          "commit": {
+            "level": "draft",
+            "previewType": "draft_event",
+            "writePolicy": "draft_only",
+            "missingFields": [
+              "date",
+              "timeStart"
+            ],
+            "reasonCodes": [
+              "NO_TEMPORAL_CONTEXT",
+              "EVALUATED_POST_NORMALIZE"
+            ],
+            "uiBadges": [
+              "Bozza — manca quando"
+            ],
+            "canConfirm": true,
+            "canWrite": false
+          },
+          "family_id": "sim-family-001",
+          "id": "sim-1757584800000-uuss7h"
+        },
+        "qualityWarnings": []
+      },
+      {
+        "text": "Domani nuoto?",
+        "agent": "Asia",
+        "agentRole": "figlio",
+        "date": "2025-09-12",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Domani forse porto io Asia",
+        "agent": "Cristian",
+        "agentRole": "genitore",
+        "date": "2025-09-15",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Domani forse porto io Chiara",
+        "agent": "Cristian",
+        "agentRole": "genitore",
+        "date": "2025-09-17",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Devo pensarci bene prima di prenotare dal pediatra",
+        "agent": "Chiara",
+        "agentRole": "genitore",
+        "date": "2025-09-19",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Domani nuoto?",
+        "agent": "Asia",
+        "agentRole": "figlio",
+        "date": "2025-09-22",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Domani forse porto io Roberto",
+        "agent": "Cristian",
+        "agentRole": "genitore",
+        "date": "2025-09-22",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      },
+      {
+        "text": "Devo pensarci bene prima de prenotare dal pediatra",
+        "agent": "Chiara",
+        "agentRole": "genitore",
+        "date": "2025-09-22",
+        "expectedIntent": "calendar",
+        "actualIntent": "none",
+        "confidence": 0,
+        "expectedTable": "events",
+        "actualTable": null,
+        "recordWritten": false,
+        "issues": [
+          "table: expected events, got none",
+          "record not written",
+          "quality warnings: 1"
+        ],
+        "recordSnapshot": null,
+        "qualityWarnings": [
+          "no record written"
+        ]
+      }
+    ]
+  },
+  "reasonCodeAnalysis": {
+    "totalCodesEmitted": 176,
+    "uniqueCodes": 7,
+    "ranked": [
+      {
+        "code": "MINOR_LOGISTICS_UNRESOLVED",
+        "count": 64,
+        "samples": [
+          {
+            "text": "Domani porto Asia a scuola alle 8:30",
+            "agent": "Cristian",
+            "level": "light"
+          },
+          {
+            "text": "lunedi ho catechismo",
+            "agent": "Asia",
+            "level": "light"
+          },
+          {
+            "text": "Sabato vado a dormire da Sofia",
+            "agent": "Viola",
+            "level": "light"
+          }
+        ]
+      },
+      {
+        "code": "PARTIAL_TEMPORAL_CONTEXT",
+        "count": 53,
+        "samples": [
+          {
+            "text": "lunedi ho catechismo",
+            "agent": "Asia",
+            "level": "light"
+          },
+          {
+            "text": "Sabato vado a dormire da Sofia",
+            "agent": "Viola",
+            "level": "light"
+          },
+          {
+            "text": "Dobbiamo decidere chi porta le bambine lunedi",
+            "agent": "Cristian",
+            "level": "light"
+          }
+        ]
+      },
+      {
+        "code": "NO_TEMPORAL_CONTEXT",
+        "count": 26,
+        "samples": [
+          {
+            "text": "Passo a prendere Viola a danza alle 8:30",
+            "agent": "Cristian",
+            "level": "draft"
+          },
+          {
+            "text": "Mamma mi ha detto di mettere in ordine",
+            "agent": "Asia",
+            "level": "draft"
+          },
+          {
+            "text": "Asia ha bisogno dello zaino nuovo",
+            "agent": "Chiara",
+            "level": "draft"
+          }
+        ]
+      },
+      {
+        "code": "MISSING_PICKUP_PLAN",
+        "count": 16,
+        "samples": [
+          {
+            "text": "Domani porto Asia a scuola alle 8:30",
+            "agent": "Cristian",
+            "level": "light"
+          },
+          {
+            "text": "Domani porto Asia a scuola alle 8:30",
+            "agent": "Cristian",
+            "level": "light"
+          },
+          {
+            "text": "Oggi alle 8 devo prendere Asia a scuola e poi abbiamo i comp",
+            "agent": "Chiara",
+            "level": "light"
+          }
+        ]
+      },
+      {
+        "code": "AMBIGUOUS_SUBJECT",
+        "count": 8,
+        "samples": [
+          {
+            "text": "Devo fare i compiti di italiano per domani",
+            "agent": "Viola",
+            "level": "none"
+          },
+          {
+            "text": "Devo fare i compiti di inglese per domani",
+            "agent": "Viola",
+            "level": "none"
+          },
+          {
+            "text": "Devo fare i compiti di scienze per domani",
+            "agent": "Viola",
+            "level": "none"
+          }
+        ]
+      },
+      {
+        "code": "IMPERSONAL_NO_CONTEXT",
+        "count": 8,
+        "samples": [
+          {
+            "text": "Devo fare i compiti di italiano per domani",
+            "agent": "Viola",
+            "level": "none"
+          },
+          {
+            "text": "Devo fare i compiti di inglese per domani",
+            "agent": "Viola",
+            "level": "none"
+          },
+          {
+            "text": "Devo fare i compiti di scienze per domani",
+            "agent": "Viola",
+            "level": "none"
+          }
+        ]
+      },
+      {
+        "code": "SELF_INTENT_NO_EXTERNAL",
+        "count": 1,
+        "samples": [
+          {
+            "text": "Mi servono le scarpe da studio per giovedi",
+            "agent": "Viola",
+            "level": "light"
+          }
+        ]
+      }
+    ],
+    "byLevel": {
+      "strong": {},
+      "light": {
+        "MINOR_LOGISTICS_UNRESOLVED": 64,
+        "MISSING_PICKUP_PLAN": 16,
+        "PARTIAL_TEMPORAL_CONTEXT": 53,
+        "SELF_INTENT_NO_EXTERNAL": 1
+      },
+      "draft": {
+        "NO_TEMPORAL_CONTEXT": 26
+      },
+      "none": {
+        "AMBIGUOUS_SUBJECT": 8,
+        "IMPERSONAL_NO_CONTEXT": 8
+      }
+    },
+    "byAgent": {
+      "Cristian": {
+        "NO_TEMPORAL_CONTEXT": 8,
+        "MINOR_LOGISTICS_UNRESOLVED": 10,
+        "MISSING_PICKUP_PLAN": 9,
+        "PARTIAL_TEMPORAL_CONTEXT": 14
+      },
+      "Asia": {
+        "PARTIAL_TEMPORAL_CONTEXT": 9,
+        "MINOR_LOGISTICS_UNRESOLVED": 9,
+        "NO_TEMPORAL_CONTEXT": 11
+      },
+      "Viola": {
+        "PARTIAL_TEMPORAL_CONTEXT": 22,
+        "MINOR_LOGISTICS_UNRESOLVED": 30,
+        "AMBIGUOUS_SUBJECT": 6,
+        "IMPERSONAL_NO_CONTEXT": 6,
+        "SELF_INTENT_NO_EXTERNAL": 1
+      },
+      "Mariangela": {
+        "PARTIAL_TEMPORAL_CONTEXT": 4
+      },
+      "Chiara": {
+        "MINOR_LOGISTICS_UNRESOLVED": 14,
+        "MISSING_PICKUP_PLAN": 7,
+        "NO_TEMPORAL_CONTEXT": 7,
+        "PARTIAL_TEMPORAL_CONTEXT": 3,
+        "AMBIGUOUS_SUBJECT": 2,
+        "IMPERSONAL_NO_CONTEXT": 2
+      },
+      "Roberto": {
+        "PARTIAL_TEMPORAL_CONTEXT": 1,
+        "MINOR_LOGISTICS_UNRESOLVED": 1
+      }
+    }
+  },
+  "weeklyStats": [
+    {
+      "week": 1,
+      "total": 51,
+      "correct": 42
+    },
+    {
+      "week": 2,
+      "total": 52,
+      "correct": 48
+    },
+    {
+      "week": 3,
+      "total": 56,
+      "correct": 47
+    },
+    {
+      "week": 4,
+      "total": 55,
+      "correct": 47
+    }
+  ]
+}

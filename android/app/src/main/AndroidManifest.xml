@@ -44,4 +44,8 @@
 
     <!-- Ri-schedulare notifiche dopo reboot del device -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Microfono per riconoscimento vocale AI -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 </manifest>
