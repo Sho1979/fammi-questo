@@ -21,7 +21,7 @@ afterEach(() => { cleanup() })
 describe('WizardStep1', () => {
   it('renders welcome text', () => {
     render(<WizardStep1 onNext={() => {}} />)
-    expect(screen.getByText('Benvenuto in Fammi Questo')).toBeInTheDocument()
+    expect(screen.getByText('Fammi Questo')).toBeInTheDocument()
   })
 
   it('renders privacy note', () => {
@@ -122,16 +122,16 @@ describe('WizardStep3', () => {
   const parentData = {
     ownerRole: 'parent',
     ownerName: 'Papà',
-    adults: [{ name: 'Papà', role: 'parent' }],
+    parents: [{ name: 'Papà', role: 'parent' }],
     hasChildren: false,
     children: [],
   }
 
-  it('renders adult count buttons for parent', () => {
+  it('renders parent count buttons for parent', () => {
     const { container } = render(
       <WizardStep3 data={parentData} onUpdate={() => {}} onNext={() => {}} onBack={() => {}} />
     )
-    expect(container.textContent).toContain('Quanti adulti?')
+    expect(container.textContent).toContain('Quanti genitori?')
   })
 
   it('shows child flow message for child role', () => {
@@ -150,8 +150,8 @@ describe('WizardStep3', () => {
     expect(container.textContent).toContain('Quanti figli?')
   })
 
-  it('validates: error if adult has empty name', () => {
-    const data = { ...parentData, adults: [{ name: '', role: 'parent' }] }
+  it('validates: error if parent has empty name', () => {
+    const data = { ...parentData, ownerName: '', parents: [{ name: '', role: 'parent' }] }
     const onNext = vi.fn()
     const { container } = render(
       <WizardStep3 data={data} onUpdate={() => {}} onNext={onNext} onBack={() => {}} />

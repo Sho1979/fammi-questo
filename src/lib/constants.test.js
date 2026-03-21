@@ -88,14 +88,14 @@ describe('constants', () => {
       expect(NAV_TABS.view_only).toBeDefined()
     })
 
-    it('full has 5 tabs (Home, Spese, Statistiche, Budget, Impostazioni)', () => {
+    it('full has 5 tabs (Home, Calendario, Task, Dispensa, Spese)', () => {
       expect(NAV_TABS.full).toHaveLength(5)
       const paths = NAV_TABS.full.map(t => t.path)
       expect(paths).toContain('/')
+      expect(paths).toContain('/calendar')
+      expect(paths).toContain('/tasks')
+      expect(paths).toContain('/dispensa')
       expect(paths).toContain('/expenses')
-      expect(paths).toContain('/stats')
-      expect(paths).toContain('/budget')
-      expect(paths).toContain('/settings')
     })
 
     it('each tab has path, label, icon', () => {

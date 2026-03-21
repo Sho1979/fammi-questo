@@ -3,7 +3,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import { expect as vitestExpect } from 'vitest'
 import * as matchers from '@testing-library/jest-dom/matchers'
 
@@ -76,16 +76,18 @@ describe('ExpenseForm', () => {
     expect(container.textContent).toContain('Alimentari')
   })
 
-  it('shows validation error if no amount', () => {
+  it('shows validation error if no amount', async () => {
     const onSave = vi.fn()
     const { container } = render(<ExpenseForm {...defaultProps} onSave={onSave} />)
     const saveBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Salva'))
     fireEvent.click(saveBtn)
-    expect(container.textContent).toContain('importo valido')
+    await waitFor(() => {
+      expect(container.textContent).toContain('importo valido')
+    })
     expect(onSave).not.toHaveBeenCalled()
   })
 
-  it('shows validation error if no category', () => {
+  it('shows validation error if no category', async () => {
     const onSave = vi.fn()
     const { container } = render(<ExpenseForm {...defaultProps} onSave={onSave} />)
     // Set amount
@@ -93,7 +95,9 @@ describe('ExpenseForm', () => {
     fireEvent.change(amountInput, { target: { value: '25' } })
     const saveBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Salva'))
     fireEvent.click(saveBtn)
-    expect(container.textContent).toContain('Seleziona una categoria')
+    await waitFor(() => {
+      expect(container.textContent).toContain('Seleziona una categoria')
+    })
   })
 
   it('renders "Aggiorna" in edit mode', () => {
