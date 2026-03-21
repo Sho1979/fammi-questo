@@ -193,8 +193,20 @@ const CONTEXT_PREFIXES_RE = /^(?:tornando\s+da\s+\w+|mentre\s+(?:ero|eravamo|sta
  * Returns the sentence with the prefix removed (if any).
  */
 export function stripContextPrefix(sentence) {
-  const stripped = sentence.replace(CONTEXT_PREFIXES_RE, '')
+  let stripped = sentence.replace(CONTEXT_PREFIXES_RE, '')
   // Don't strip if it would remove the entire sentence or leave < 3 words
+  if (stripped.length < 5) stripped = sentence
+  // Also strip conversational suffixes that confuse NLP
+  stripped = stripConversationalSuffix(stripped)
+  return stripped
+}
+
+// ─── CONVERSATIONAL SUFFIX STRIPPER ─────────────────────────────
+// Strips trailing conversational fillers: "ok?", "che dici?", "va bene?", "dai", etc.
+const CONVERSATIONAL_SUFFIX_RE = /[,.]?\s*(?:ok\??|che (?:dici|ne dici|ne pensi)\??|va bene\??|d'accordo\??|capito\??|eh\??|no\??|dai|si\??)\s*$/i
+
+export function stripConversationalSuffix(sentence) {
+  const stripped = sentence.replace(CONVERSATIONAL_SUFFIX_RE, '')
   if (stripped.length < 5) return sentence
   return stripped
 }

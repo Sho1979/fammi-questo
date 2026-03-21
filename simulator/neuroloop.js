@@ -194,6 +194,29 @@ async function main() {
 
     console.log(`[NeuroLoop] ${allTrajectories.length} trajectories captured`)
 
+    // ── DUMP ERRORS (for analysis) ──────────────────
+    if (config.verbose) {
+      const errors = allTrajectories.filter(t => !t.intentCorrect && t.expectedIntent !== 'noise' && t.expectedIntent !== 'none')
+      console.log(`[NeuroLoop] ${errors.length} parse errors:`)
+      for (const e of errors) {
+        console.log(`  [${e.expectedIntent}→${e.actualIntent}] "${(e.text || '').substring(0, 80)}"`)
+      }
+    }
+    // Always save error dump to file for analysis
+    {
+      const errors = allTrajectories.filter(t => !t.intentCorrect && t.expectedIntent !== 'noise' && t.expectedIntent !== 'none')
+      const errorDump = errors.map(e => ({
+        expected: e.expectedIntent,
+        actual: e.actualIntent,
+        text: (e.text || '').substring(0, 120),
+        confidence: e.confidence,
+        recordWritten: e.recordWritten,
+        agent: e.agent,
+      }))
+      const fs = await import('fs')
+      fs.writeFileSync(`neuroloop/logs/_errors_loop${loopIndex}.json`, JSON.stringify(errorDump, null, 2))
+    }
+
     // ── 3. ANALYZE ──────────────────────────────────
     console.log('[NeuroLoop] Analyzing with NeuralCore...')
     const allMembers = families.flatMap(f => f.members)

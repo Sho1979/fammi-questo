@@ -84,8 +84,10 @@ function resolveKeywordCategory(sentence, currentCategory) {
  * @param {object} [debugTrace] - Se fornito, raccoglie dati debug per ogni frase
  */
 export async function parseLocally(text, members = [], familyId = null, currentMember = null, debugTrace = null) {
-  // Check if original text is a question BEFORE splitSentences strips "?"
-  const _isOriginalQuestion = /\?\s*$/.test(text.trim())
+  // Check if original text is a genuine question BEFORE splitSentences strips "?"
+  // Exclude conversational tags: "ok?", "che dici?", "va bene?", "d'accordo?", "no?"
+  const CONVERSATIONAL_TAG_RE = /[,.]?\s*(?:ok|che (?:dici|ne dici|ne pensi)|va bene|d'accordo|capito|eh|no|dai|si)\s*\?\s*$/i
+  const _isOriginalQuestion = /\?\s*$/.test(text.trim()) && !CONVERSATIONAL_TAG_RE.test(text.trim())
   const sentences = splitSentences(text)
   const actions = []
   let totalConfidence = 0
@@ -798,12 +800,16 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     const socialPersonalPatterns = [
       // "vado a dormire da X" — sleepover
       /\bvado\s+a\s+dormire\s+(?:da|a\s+casa\s+di)\s+/i,
+      // "a dormire da X sabato vado" — inverted sleepover (colloquial Italian)
+      /^a\s+dormire\s+(?:da|a\s+casa\s+di)\s+/i,
       // "vado a/al/alla + luogo" con giorno esplicito
       /\bvado\s+(?:al|alla|all['']\s*|a)\s+\w+/i,
       // "ho + attività nota" — impegno personale
       /\bho\s+(?:catechismo|danza|nuoto|pallavolo|basket|calcio|tennis|karate|palestra|allenamento|lezione|partita|gara|saggio|recita|corso|il\s+torneo)\b/i,
       // "andiamo a/al/da" — uscita di gruppo
       /\bandiamo\s+(?:al?|da[li]?|in)\s+/i,
+      // "mi segni che..." — request to note something → calendar
+      /^mi\s+segni?\s+che\s+/i,
     ]
     const isSocialPersonal = socialPersonalPatterns.some(re => re.test(lower))
     const hasDateContext = date !== todayStrEarly || /\b(?:domani|dopodomani|luned[iì]|marted[iì]|mercoled[iì]|gioved[iì]|venerd[iì]|sabato|domenica)\b/i.test(lower)
