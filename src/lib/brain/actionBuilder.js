@@ -73,14 +73,26 @@ export function buildAction(type, sentence, ctx) {
         action.withPerson = mainPerson.name
       }
 
-      action.time = time
+      // Default time for meal context (pranzo 12:30, cena 19:30)
+      const lowerForTime = sentence.toLowerCase()
+      let effectiveTime = time
+      if (!time) {
+        if (/\b(?:pranzo|pranzare|pranziamo|mezzogiorno|a\s+pranzo)\b/.test(lowerForTime)) {
+          effectiveTime = '12:30'
+        } else if (/\b(?:cena|cenare|ceniamo|cenetta|a\s+cena)\b/.test(lowerForTime)) {
+          effectiveTime = '19:30'
+        } else if (/\b(?:colazione|prima\s+colazione)\b/.test(lowerForTime)) {
+          effectiveTime = '08:00'
+        }
+      }
+      action.time = effectiveTime
       if (activity) action.activity = activity
       action.category = category || categoryFromActivity(activity)
       // Flag incomplete if missing critical fields
       if (!date) {
         action.incomplete = 'Manca la data'
         action.warnings = [...(action.warnings || []), 'missing_date']
-      } else if (!time) {
+      } else if (!effectiveTime) {
         action.incomplete = 'Manca l\'orario'
       }
 

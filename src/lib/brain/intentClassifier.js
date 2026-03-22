@@ -948,10 +948,10 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       /^(?:devo|dobbiamo)\s+(?:parlare|chiamare|prenotare|iscrivere|firmare|portare\s+(?:il?|l[aoe])|rinnovare|pagare)/i,
       /^(?:iscrivere|iscrizione|prenotare|fissare|rinnovare)\s+/i,
       /^(?:preparare|consegnare|portare|lavare|stirare|pulire|controllare|organizzare|sistemare)\s+(?:il?|la|le|i|lo|gli|un[oa]?)\b/i,
-      // "deve studiare / deve fare i compiti" — compiti scolastici = task, non calendar
-      /\bdeve\s+(?:studiare|fare\s+i\s+compiti|ripassare|esercitarsi)\b/i,
-      // "da ritirare / da firmare / da consegnare" — azione pendente = task
-      /\bda\s+(?:ritirare|firmare|consegnare|compilare|restituire)\b/i,
+      // "deve studiare / deve fare i compiti / deve preparare" — task, non calendar
+      /\bdeve\s+(?:studiare|fare\s+i\s+compiti|ripassare|esercitarsi|preparare|apparecchiare|sparecchiare|lavare|pulire|stirare|cucinare|sistemare|riordinare|mettere\s+in\s+ordine)\b/i,
+      // "da ritirare / da firmare / da consegnare / da fare" — azione pendente = task
+      /\bda\s+(?:ritirare|firmare|consegnare|compilare|restituire|fare|finire|completare)\b/i,
     ]
     const isDirectTask = taskDirectPatterns.some(re => re.test(lower.trim()))
     // Override: "bisogna/devo comprare" + grocery items → shopping, not task
