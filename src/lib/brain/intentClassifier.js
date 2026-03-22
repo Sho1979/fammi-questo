@@ -955,8 +955,9 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     ]
     const isDirectTask = taskDirectPatterns.some(re => re.test(lower.trim()))
     // Override: "bisogna/devo comprare" + grocery items → shopping, not task
-    const GROCERY_WORDS_RE = /\b(?:pane|latte|uova|formaggio|burro|yogurt|prosciutto|salame|mortadella|mozzarella|verdur[ae]|frutta|carne|pollo|pesce|olio|aceto|farina|zucchero|riso|detersivo|sapone|shampoo|pannolini|nurofen|tachipirina|biscotti|crackers|cereali|carta\s*igienica|pasta(?!\s+(?:al|con|di\s+\w+\s+per)))\b/i
-    const hasGroceryObject = /\b(?:comprare|compra|prendere|prendi)\b/i.test(lower) && GROCERY_WORDS_RE.test(lower)
+    const GROCERY_WORDS_RE = /\b(?:pane|latte|uova|formaggio|burro|yogurt|prosciutto|salame|mortadella|mozzarella|verdur[ae]|frutta|carne|pollo|pesce|olio|aceto|farina|zucchero|riso|detersivo|sapone|shampoo|pannolini|nurofen|tachipirina|biscotti|crackers|cereali|carta\s*igienica|crocchette|croccantini|dentifricio|doposole|crema\s*solare|vino|prosecco|wurstel|ketchup|ricotta|grana|parmigian[oa]|pasta(?!\s+(?:al|con|di\s+\w+\s+per)))\b/i
+    // Include "serve/servono/manca/finito" as shopping verbs when paired with grocery items
+    const hasGroceryObject = /\b(?:comprare|compra|prendere|prendi|serv[eo]n?o?|manca(?:no)?|finit[oiae]|abbiamo\s+finito)\b/i.test(lower) && GROCERY_WORDS_RE.test(lower)
     if (isDirectTask && hasGroceryObject) {
       const action = buildAction('shopping', sentence, {
         amount: null, date, time: null, persons, members, logistics, timeCtx,
@@ -1020,7 +1021,7 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     // Posizionato DOPO reminder (L0c) e task (L0d) per non rubare i loro match.
     // Cattura SOLO: lista spesa esplicita, "al supermercato/Lidl/Coop", quantità tipiche,
     // "compra/prendi + grocery item" SENZA verbi task/reminder a inizio frase.
-    const GROCERY_RE = /\b(?:pane|latte|uova|formaggio|burro|mozzarella|prosciutto|salame|mortadella|yogurt|farina|zucchero|olio|aceto|pannolini|nurofen|tachipirina|detersivo|sapone|shampoo|carta\s*igienica|biscotti|crackers|cereali)\b/i
+    const GROCERY_RE = /\b(?:pane|latte|uova|formaggio|burro|mozzarella|prosciutto|salame|mortadella|yogurt|farina|zucchero|olio|aceto|pannolini|nurofen|tachipirina|detersivo|sapone|shampoo|carta\s*igienica|biscotti|crackers|cereali|crocchette|croccantini|dentifricio|doposole|crema\s*solare|vino|prosecco|wurstel|ketchup|ricotta|grana|parmigian[oa])\b/i
     const shoppingL0Patterns = [
       // "lista spesa" / "lista della spesa"
       /\blista\s+(?:della\s+)?spesa\b/i,
@@ -1030,6 +1031,10 @@ export async function parseLocally(text, members = [], familyId = null, currentM
       /^(?:andiamo|vai|andate|domani(?:\s+mattina)?)\s+(?:al\s+supermercato|alla\s+coop|al\s+lidl|all['']\s*esselunga|al\s+conad|al\s+carrefour)\b/i,
       // "un etto di / tre etti di / mezzo chilo di" — quantità tipiche spesa
       /\b(?:un\s+etto|due\s+etti|tre\s+etti|mezzo\s+chilo|un\s+chilo|due\s+chili|un\s+litro|due\s+litri|una\s+confezione|un\s+pacco|una\s+bottiglia|due\s+bottiglie|una\s+scatola)\s+(?:di\s+)/i,
+      // "comprare/compra + articolo" — azione di acquisto diretta (senza contesto task)
+      /^(?:comprare|compra|comprami|da\s+comprare|prendere|prendi|prendimi)\s+(?:il|la|le|i|lo|gli|un[oa]?|del|dei|delle|degli)\b/i,
+      // "ci serve / ci servono / abbiamo finito / è finito + articolo" → shopping
+      /\b(?:ci\s+serv[eo](?:no)?|abbiamo\s+finit[oiae]|[eè]\s+finit[oiae]|manca(?:no)?)\b.*\b(?:il|la|le|i|lo|gli|un[oa]?)\s+\w/i,
     ]
     // Guard: no amount, no logistic, no meal context
     const isMealContext = /\b(?:a\s+pranzo|a\s+cena|per\s+cena|per\s+pranzo|si\s+mangia|mangiamo|cuciniamo|prepariamo|menu)\b/i.test(lower)
@@ -1095,7 +1100,7 @@ export async function parseLocally(text, members = [], familyId = null, currentM
     // NLP.js wrongly classifies "comprare tubi da giardino" as shopping.
     // If NLP says "shopping" but sentence has no grocery keywords → override to task.
     // Also flag for L2 synapse deboost below.
-    const _groceryCheckRe = /\b(?:pane|latte|uova|formaggio|parmigiano|grana|pecorino|ricotta|burro|mozzarella|prosciutto|salame|mortadella|yogurt|farina|zucchero|olio|aceto|sale|pepe|pannolini|nurofen|tachipirina|detersivo|sapone|shampoo|carta\s*igienica|biscotti|crackers|cereali|verdur[ae]|frutta|carne|pollo|pesce|riso|pasta(?!\s+(?:al|con|di\s+\w+\s+per))|marmellata|miele|nutella|tonno|salmone|insalata|pomodor[io]|patate|cipolle?|aglio|carote|zucchine|limoni?|arance?|banane?|mele)\b/i
+    const _groceryCheckRe = /\b(?:pane|latte|uova|formaggio|parmigiano|grana|pecorino|ricotta|burro|mozzarella|prosciutto|salame|mortadella|yogurt|farina|zucchero|olio|aceto|sale|pepe|pannolini|nurofen|tachipirina|detersivo|sapone|shampoo|dentifricio|carta\s*igienica|biscotti|crackers|cereali|verdur[ae]|frutta|carne|pollo|pesce|riso|pasta(?!\s+(?:al|con|di\s+\w+\s+per))|marmellata|miele|nutella|tonno|salmone|insalata|pomodor[io]|patate|cipolle?|aglio|carote|zucchine|limoni?|arance?|banane?|mele|crocchette|croccantini|wurstel|ketchup|doposole|crema\s*solare|vino|prosecco|birra|palloncini|piatti|bicchieri|vestit[oiae]|scarpe(?:tte)?|quadern[oiae]|cartella|regalo|medicine|farmaci)\b/i
     let _shoppingGuardFired = false
     if (nlpType === 'shopping' && !_groceryCheckRe.test(lower)
         && !/\blista\s+(?:della\s+)?spesa\b/i.test(lower) && !/\bspesa\b/i.test(lower)) {
