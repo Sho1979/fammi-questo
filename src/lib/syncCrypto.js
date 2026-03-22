@@ -18,8 +18,8 @@
 // Only data fields that contain personal/family information.
 // Structural fields (id, family_id, *_at, _version, _device_id, _deleted, etc.) are NEVER encrypted.
 export const SENSITIVE_FIELDS = {
-  family: ['name', 'pin_hash', 'invite_code'],
-  members: ['name', 'surname', 'birth_date', 'avatar', 'role'],
+  family: ['name', 'invite_code'],  // pin_hash excluded: never leaves device
+  members: ['name', 'surname', 'birth_date', 'avatar', 'role'],  // pin_hash excluded from sync entirely
   expenses: ['amount', 'note', 'category', 'subcategory', 'description'],
   budgets: ['category', 'monthly_amount', 'month'],
   events: ['title', 'description', 'time', 'location', 'type'],

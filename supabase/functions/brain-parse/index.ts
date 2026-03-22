@@ -8,8 +8,11 @@
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const MODEL = "claude-haiku-4-5-20251001";
 const MAX_TOKENS = 1024;
 
@@ -45,6 +48,33 @@ Deno.serve(async (req: Request) => {
       { status: 405, headers: corsHeaders }
     );
   }
+
+  // ── JWT verification ──
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) {
+    return new Response(
+      JSON.stringify({ ok: false, error: "Missing authorization", code: "AUTH_MISSING" }),
+      { status: 401, headers: corsHeaders }
+    );
+  }
+
+  const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+
+  if (authError || !user) {
+    const origin = req.headers.get("Origin") || "unknown";
+    console.warn(`[AUTH] Rejected: ${authError?.message || "no user"} from ${origin}`);
+    return new Response(
+      JSON.stringify({ ok: false, error: "Invalid or expired token", code: "AUTH_INVALID" }),
+      { status: 401, headers: corsHeaders }
+    );
+  }
+
+  // Audit log (no sensitive data)
+  console.info(`[AUDIT] brain-parse called by user=${user.id}`);
 
   if (!ANTHROPIC_API_KEY) {
     return new Response(

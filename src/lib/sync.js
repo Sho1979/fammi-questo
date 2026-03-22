@@ -68,7 +68,38 @@ const TABLE_MAP = {
 const SYNC_TABLES = Object.keys(TABLE_MAP)
 
 // ─── Sync mutex: prevent concurrent sync operations ─────────
+// Web Locks API provides cross-tab protection; in-memory flag is fallback.
 let _syncInProgress = false
+
+/**
+ * Acquire a sync lock — prevents concurrent sync across tabs (Web Locks)
+ * or within the same tab (in-memory fallback).
+ * @param {Function} fn - async function to run under lock
+ * @returns {Promise<*>} result of fn, or { skipped: true } if lock unavailable
+ */
+async function acquireSyncLock(fn) {
+  if (typeof navigator !== 'undefined' && navigator.locks) {
+    return navigator.locks.request('fm-sync', { ifAvailable: true }, async (lock) => {
+      if (!lock) {
+        console.info('[Sync] Another tab holds the lock, skipping')
+        return { skipped: true }
+      }
+      return fn()
+    })
+  }
+
+  // Fallback: in-memory flag (single-tab protection)
+  if (_syncInProgress) {
+    console.info('[Sync] Sync already in progress (fallback lock)')
+    return { skipped: true }
+  }
+  _syncInProgress = true
+  try {
+    return await fn()
+  } finally {
+    _syncInProgress = false
+  }
+}
 
 /**
  * Generate a 6-char uppercase invite code.
@@ -116,8 +147,9 @@ export async function pushToCloud(familyId, onProgress, syncKey) {
 
       if (records.length === 0) continue
 
+      // Strip pin_hash — must never leave the device
       // Convert timestamps to ISO strings for Supabase
-      const cleaned = records.map((r) => ({
+      const cleaned = records.map(({ pin_hash, ...r }) => ({
         ...r,
         created_at: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
         updated_at: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
@@ -261,12 +293,7 @@ export async function pullFromCloud(familyId, onProgress, syncKey) {
  * @param {CryptoKey} [syncKey] — AES-GCM key; if provided, sync is encrypted
  */
 export async function fullSync(familyId, onProgress, syncKey) {
-  if (_syncInProgress) {
-    console.warn('[Sync] Sync already in progress, skipping')
-    return { skipped: true }
-  }
-  _syncInProgress = true
-  try {
+  return acquireSyncLock(async () => {
     // Push first (local wins for any conflicts during push)
     await pushToCloud(familyId, (p) =>
       onProgress?.({ phase: 'push', ...p }),
@@ -277,9 +304,7 @@ export async function fullSync(familyId, onProgress, syncKey) {
       onProgress?.({ phase: 'pull', ...p }),
       syncKey
     )
-  } finally {
-    _syncInProgress = false
-  }
+  })
 }
 
 /**

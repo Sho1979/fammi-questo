@@ -23,7 +23,12 @@ const TABLES = [
 export async function exportBackup(pin) {
   const data = {}
   for (const table of TABLES) {
-    data[table] = await db[table].toArray()
+    let records = await db[table].toArray()
+    // Strip pin_hash — credentials must never leave the device
+    if (table === 'members' || table === 'family') {
+      records = records.map(({ pin_hash, ...rest }) => rest)
+    }
+    data[table] = records
   }
 
   const payload = JSON.stringify({
@@ -64,23 +69,72 @@ export async function importBackup(file, pin) {
     throw new Error('Formato backup non riconosciuto')
   }
 
-  // Clear and import each table
-  let totalRecords = 0
-  let totalTables = 0
+  // Minimum required fields per table
+  const REQUIRED_FIELDS = {
+    family:        ['id', 'name'],
+    members:       ['id', 'family_id', 'name', 'role'],
+    expenses:      ['id', 'family_id', 'date'],
+    events:        ['id', 'family_id', 'date'],
+    tasks:         ['id', 'family_id'],
+    budgets:       ['id'],
+    shoppingItems: ['id', 'family_id'],
+    inventory:     ['id', 'family_id'],
+    meals:         ['id', 'family_id'],
+    notifications: ['id', 'family_id'],
+  }
+
+  function validateRecords(tableName, records) {
+    const required = REQUIRED_FIELDS[tableName]
+    if (!required) return { valid: records, rejected: [] }
+
+    const valid = []
+    const rejected = []
+    for (const record of records) {
+      if (!record || typeof record !== 'object') {
+        rejected.push({ record, reason: 'not_an_object' })
+        continue
+      }
+      const missing = required.filter(f => record[f] === undefined || record[f] === null)
+      if (missing.length > 0) {
+        rejected.push({ record, reason: `missing_fields: ${missing.join(', ')}` })
+      } else {
+        valid.push(record)
+      }
+    }
+    return { valid, rejected }
+  }
+
+  // Clear and import each table with validation
+  const importReport = { imported: 0, rejected: 0, tables: 0, details: [] }
 
   await db.transaction('rw', TABLES.map((t) => db[t]), async () => {
     for (const table of TABLES) {
       const records = parsed.tables[table]
-      if (records && Array.isArray(records)) {
-        await db[table].clear()
-        await db[table].bulkAdd(records)
-        totalRecords += records.length
-        totalTables++
+      if (!records || !Array.isArray(records)) continue
+
+      await db[table].clear()
+
+      const { valid, rejected } = validateRecords(table, records)
+      if (rejected.length > 0) {
+        importReport.rejected += rejected.length
+        importReport.details.push({ table, rejected })
+        console.warn(`[Backup] ${table}: ${rejected.length} record scartati`, rejected)
       }
+      if (valid.length > 0) {
+        await db[table].bulkAdd(valid)
+        importReport.imported += valid.length
+      }
+      importReport.tables++
     }
   })
 
-  return { tables: totalTables, records: totalRecords }
+  if (importReport.rejected > 0) {
+    console.warn(`[Backup] Import: ${importReport.imported} importati, ${importReport.rejected} scartati`)
+  } else {
+    console.info(`[Backup] Import completato: ${importReport.imported} record in ${importReport.tables} tabelle`)
+  }
+
+  return importReport
 }
 
 /**
