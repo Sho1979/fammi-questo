@@ -133,4 +133,62 @@ describe('TaskCard', () => {
     )
     expect(container.textContent).toContain('Matematica e scienze')
   })
+
+  it('hides description when task is done', () => {
+    const descTask = { ...baseTask, description: 'Dettaglio', status: 'done' }
+    const { container } = render(
+      <TaskCard task={descTask} members={members} onToggle={() => {}} onEdit={() => {}} onDelete={() => {}} isParent />
+    )
+    expect(container.textContent).not.toContain('Dettaglio')
+  })
+
+  it('shows reassign member picker when Assegna clicked', () => {
+    const newTask = { ...baseTask, accepted: false, status: 'todo' }
+    const { container } = render(
+      <TaskCard task={newTask} members={members} onToggle={() => {}} onEdit={() => {}} onDelete={() => {}} onAccept={() => {}} onReassign={() => {}} isParent />
+    )
+    const assignBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Assegna'))
+    fireEvent.click(assignBtn)
+    expect(container.textContent).toContain('Assegna a:')
+    expect(container.textContent).toContain('Papà')
+  })
+
+  it('calls onReassign when member is picked', () => {
+    const onReassign = vi.fn()
+    const newTask = { ...baseTask, accepted: false, status: 'todo' }
+    const { container } = render(
+      <TaskCard task={newTask} members={members} onToggle={() => {}} onEdit={() => {}} onDelete={() => {}} onAccept={() => {}} onReassign={onReassign} isParent />
+    )
+    const assignBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Assegna'))
+    fireEvent.click(assignBtn)
+    const papBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Papà'))
+    fireEvent.click(papBtn)
+    expect(onReassign).toHaveBeenCalledWith('t1', 'm1')
+  })
+
+  it('shows reminder style for needsConfirm tasks', () => {
+    const reminderTask = { ...baseTask, accepted: false, status: 'todo', needsConfirm: true, fromPerson: 'Papà' }
+    const { container } = render(
+      <TaskCard task={reminderTask} members={members} onToggle={() => {}} onEdit={() => {}} onDelete={() => {}} onAccept={() => {}} isParent />
+    )
+    expect(container.textContent).toContain('Letto ✓')
+    expect(container.textContent).toContain('Papà')
+  })
+
+  it('shows reopen button for done tasks when isParent', () => {
+    const doneTask = { ...baseTask, status: 'done' }
+    const { container } = render(
+      <TaskCard task={doneTask} members={members} onToggle={() => {}} onEdit={() => {}} onDelete={() => {}} isParent />
+    )
+    expect(container.querySelector('[aria-label="Riapri"]')).toBeTruthy()
+  })
+
+  it('hides edit/delete for done tasks', () => {
+    const doneTask = { ...baseTask, status: 'done' }
+    const { container } = render(
+      <TaskCard task={doneTask} members={members} onToggle={() => {}} onEdit={() => {}} onDelete={() => {}} isParent />
+    )
+    expect(container.querySelector('[aria-label="Modifica"]')).toBeFalsy()
+    expect(container.querySelector('[aria-label="Elimina"]')).toBeFalsy()
+  })
 })

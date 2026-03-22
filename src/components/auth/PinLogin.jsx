@@ -148,7 +148,7 @@ export default function PinLogin({ member, onLogin, onBack }) {
         </div>
       )}
       {error && !isLocked && (
-        <p className="mb-4 text-sm font-medium text-red-500">{error}</p>
+        <p role="alert" className="mb-4 text-sm font-medium text-red-500">{error}</p>
       )}
       {!error && !isLocked && <div className="mb-4 h-5" />}
 

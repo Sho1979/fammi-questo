@@ -298,7 +298,7 @@ export default function EventForm({ members, currentMember, onSave, event, onClo
       )}
 
       {/* Error */}
-      {error && <p className="text-sm font-medium text-red-500">{error}</p>}
+      {error && <p role="alert" className="text-sm font-medium text-red-500">{error}</p>}
 
       {/* Actions */}
       <div className="flex gap-3 pt-2">

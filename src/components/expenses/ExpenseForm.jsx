@@ -129,7 +129,7 @@ export default function ExpenseForm({ members, currentMember, onSave, expense, o
       )}
 
       {/* Error — from useActionState */}
-      {formState.error && <p className="text-sm font-medium text-red-500">{formState.error}</p>}
+      {formState.error && <p role="alert" className="text-sm font-medium text-red-500">{formState.error}</p>}
 
       {/* Actions */}
       <div className="flex gap-3 pt-2">
