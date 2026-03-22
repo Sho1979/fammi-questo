@@ -4,7 +4,7 @@
  * Aggiunge classi platform al <html> per CSS condizionale:
  *   plt-ios, plt-android, plt-web, plt-native
  */
-import { StrictMode } from 'react'
+import React, { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { platform, isNative } from './lib/platform.js'
 import './index.css'
@@ -22,6 +22,15 @@ if (platform === 'ios') {
   if (viewport && !viewport.content.includes('viewport-fit=cover')) {
     viewport.content += ', viewport-fit=cover'
   }
+}
+
+// Dev-only: axe-core accessibility audit (logs violations to console)
+if (import.meta.env.DEV) {
+  import('@axe-core/react').then((axe) => {
+    import('react-dom').then((ReactDOM) => {
+      axe.default(React, ReactDOM, 1000)
+    })
+  }).catch(() => {}) // silent fail if not installed
 }
 
 createRoot(document.getElementById('root')).render(
