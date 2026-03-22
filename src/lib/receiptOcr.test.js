@@ -1,21 +1,36 @@
 /**
  * Tests for receiptOcr.js
+ * @vitest-environment jsdom
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { extractProductsFromReceipt, OcrError, getAutoExpiry, getAutoLocation } from './receiptOcr.js'
 
+// Mock supabase to control isSyncEnabled
+vi.mock('./supabase.js', () => ({
+  isSyncEnabled: () => false,
+  supabase: { functions: { invoke: vi.fn() } },
+}))
+
 describe('receiptOcr', () => {
-  it('extractProductsFromReceipt throws OcrError with OCR_NOT_AVAILABLE', async () => {
+  it('extractProductsFromReceipt throws OcrError when sync not enabled', async () => {
+    // Without sync configured, should throw OCR_SYNC_DISABLED
     await expect(extractProductsFromReceipt('data:image/png;base64,abc'))
       .rejects.toThrow(OcrError)
 
     try {
       await extractProductsFromReceipt('data:image/png;base64,abc')
     } catch (err) {
-      expect(err.code).toBe('OCR_NOT_AVAILABLE')
+      expect(err.code).toBe('OCR_SYNC_DISABLED')
       expect(err.name).toBe('OcrError')
-      expect(err.message).toContain('non è ancora disponibile')
+      expect(err.message).toContain('sync cloud')
     }
+  })
+
+  it('OcrError has correct code property', () => {
+    const err = new OcrError('OCR_API_ERROR', 'test')
+    expect(err.code).toBe('OCR_API_ERROR')
+    expect(err.name).toBe('OcrError')
+    expect(err.message).toBe('test')
   })
 
   it('getAutoExpiry returns future date string', () => {

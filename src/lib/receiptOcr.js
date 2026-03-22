@@ -63,34 +63,65 @@ export function captureReceipt() {
  * @returns {Promise<Array<{name: string, quantity: number, price: number|null, category: string}>>}
  */
 export async function extractProductsFromReceipt(imageDataUrl) {
-  // Guard: OCR edge function not yet deployed
-  throw new OcrError(
-    'OCR_NOT_AVAILABLE',
-    'La scansione scontrini non è ancora disponibile. Inserisci la spesa manualmente.'
-  )
-
-  // --- Implementazione futura (rimuovere il throw sopra quando receipt-ocr è deployata) ---
   if (!isSyncEnabled()) {
-    throw new OcrError('OCR_SYNC_DISABLED', 'OCR non disponibile: sync non configurato.')
+    throw new OcrError('OCR_SYNC_DISABLED', 'Per scansionare gli scontrini devi attivare la sync cloud nelle Impostazioni.')
   }
 
   // Extract base64 and media type
   const match = imageDataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/)
-  if (!match) throw new Error('Formato immagine non valido')
+  if (!match) throw new OcrError('OCR_INVALID_IMAGE', 'Formato immagine non valido')
   const mediaType = match[1]
-  const base64Data = match[2]
+
+  // Resize image to max 800px to reduce API costs
+  const resizedBase64 = await resizeImage(imageDataUrl, 800)
 
   const { data, error } = await supabase.functions.invoke('receipt-ocr', {
     body: {
-      image: base64Data,
+      image: resizedBase64,
       media_type: mediaType,
     },
   })
 
-  if (error) throw new Error(`Errore OCR: ${error.message}`)
-  if (!data?.products) return []
+  if (error) throw new OcrError('OCR_API_ERROR', `Errore scansione: ${error.message}`)
+  if (!data?.ok) throw new OcrError('OCR_API_ERROR', data?.error || 'Errore nella risposta')
+  if (!data?.products || data.products.length === 0) {
+    throw new OcrError('OCR_API_ERROR', 'Nessun prodotto trovato nello scontrino. Riprova con una foto più chiara.')
+  }
 
   return data.products.filter((p) => p.name && typeof p.name === 'string')
+}
+
+/**
+ * Resize image to max dimension (preserving aspect ratio) to reduce API token costs.
+ * Returns base64 string (without data URL prefix).
+ */
+function resizeImage(dataUrl, maxDim) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      let { width, height } = img
+      if (width <= maxDim && height <= maxDim) {
+        // Already small enough — strip prefix and return
+        resolve(dataUrl.split(',')[1])
+        return
+      }
+      // Scale down
+      const ratio = Math.min(maxDim / width, maxDim / height)
+      width = Math.round(width * ratio)
+      height = Math.round(height * ratio)
+
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0, width, height)
+      // Export as JPEG with 85% quality
+      const resized = canvas.toDataURL('image/jpeg', 0.85)
+      resolve(resized.split(',')[1])
+    }
+    img.onerror = () => reject(new Error('Errore nel ridimensionamento immagine'))
+    img.src = dataUrl
+  })
 }
 
 /**
