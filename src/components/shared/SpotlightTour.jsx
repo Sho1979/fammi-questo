@@ -33,12 +33,10 @@ export default function SpotlightTour({ steps, isOpen, onComplete }) {
       return
     }
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    // Delay measurement to let scroll finish
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setTargetRect(el.getBoundingClientRect())
-      })
-    })
+    // Delay measurement to let smooth scroll finish (~400ms)
+    setTimeout(() => {
+      setTargetRect(el.getBoundingClientRect())
+    }, 450)
   }, [step, isLast, onComplete])
 
   // Open/close handling

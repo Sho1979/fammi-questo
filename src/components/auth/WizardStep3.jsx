@@ -3,7 +3,7 @@
  * If parent: parents (up to 4), grandparents (up to 4), children (up to 8).
  * If child: invite code entry → member selection → join family.
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { joinFamilyByCode } from '../../lib/sync.js'
 import { db } from '../../lib/localDb.js'
 
@@ -200,6 +200,17 @@ export default function WizardStep3({ data, onUpdate, onNext, onBack }) {
   // Children (figli)
   const hasChildren = data.hasChildren ?? false
   const children = data.children || []
+
+  // Sync adults on initial mount — ensures owner is always in data.adults
+  // even if user doesn't modify the parents list
+  useEffect(() => {
+    if (!data.adults || data.adults.length === 0) {
+      const combined = [...parents, ...grandparents]
+      if (combined.length > 0 && combined[0].name) {
+        onUpdate({ adults: combined })
+      }
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Build the combined adults array for SetupWizard compatibility
   const syncAdults = (newParents, newGrandparents) => {
