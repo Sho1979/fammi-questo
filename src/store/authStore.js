@@ -16,6 +16,8 @@ const useAuthStore = create(
       isSetupComplete: false,
       ownerName: null, // set during setup for auto-select on login
       sessionPin: null, // in-memory only (excluded from persist) — for encrypted sync key derivation
+      tourCompleted: false, // persisted: has user seen the guided tour?
+      brainTipCount: 0, // persisted: how many times Brain was used (for first-use tips)
 
       // --- Actions ---
 
@@ -34,6 +36,12 @@ const useAuthStore = create(
       /** Store the owner's name for auto-select on first login */
       setOwnerName: (name) => set({ ownerName: name }),
 
+      /** Mark guided tour as completed or reset it */
+      setTourCompleted: (val) => set({ tourCompleted: val }),
+
+      /** Increment Brain usage counter (for first-use tip) */
+      incrementBrainTipCount: () => set((s) => ({ brainTipCount: s.brainTipCount + 1 })),
+
       /** Logout current member (back to member-select screen) */
       logout: () => {
         destroyNlp()
@@ -49,6 +57,8 @@ const useAuthStore = create(
           isSetupComplete: false,
           ownerName: null,
           sessionPin: null,
+          tourCompleted: false,
+          brainTipCount: 0,
         })
       },
 
@@ -91,6 +101,8 @@ const useAuthStore = create(
         currentMember: state.currentMember,
         isSetupComplete: state.isSetupComplete,
         ownerName: state.ownerName,
+        tourCompleted: state.tourCompleted,
+        brainTipCount: state.brainTipCount,
       }),
     }
   )

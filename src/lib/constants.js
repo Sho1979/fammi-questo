@@ -85,6 +85,14 @@ export const NAV_TABS = {
   view_only: [TAB_HOME, TAB_SETTINGS],
 }
 
+/** Access level labels for Italian UI — used in permission editor dropdown */
+export const ACCESS_LEVEL_LABELS = [
+  { id: 'full', label: 'Completo', description: 'Accesso a tutto', icon: '🔓' },
+  { id: 'calendar_tasks', label: 'Calendario e Task', description: 'Calendario, task, dispensa, spese', icon: '📅' },
+  { id: 'basic', label: 'Base', description: 'Home, task, dispensa', icon: '📋' },
+  { id: 'view_only', label: 'Solo visualizzazione', description: 'Può solo visualizzare', icon: '👁️' },
+]
+
 /** Task categories for R2 — id, label (Italian), icon */
 export const TASK_CATEGORIES = [
   { id: 'pulizia', label: 'Pulizia', icon: '🧹' },

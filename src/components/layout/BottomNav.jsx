@@ -86,6 +86,7 @@ export default function BottomNav() {
 
   return (
     <nav
+      data-tour="nav-bar"
       className="fixed bottom-0 left-0 right-0 z-40"
       style={{
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',

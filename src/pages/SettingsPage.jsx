@@ -10,15 +10,16 @@ import { isSyncEnabled } from '../lib/supabase.js'
 import { registerFamilyOnCloud, joinFamilyByCode } from '../lib/sync.js'
 import { PersonBadge, ConfirmDialog, Modal } from '../components/shared/index.js'
 import { showSuccess, showError } from '../lib/toast.js'
-import { Users, Database, LogOut, Trash2, Download, Upload, Shield, Cloud, CloudOff, UserPlus, Copy, RefreshCw, Eye, Wifi, WifiOff, HardDrive, QrCode, CheckCircle, AlertCircle, Brain } from 'lucide-react'
+import { Users, Database, LogOut, Trash2, Download, Upload, Shield, Cloud, CloudOff, UserPlus, Copy, RefreshCw, Eye, Wifi, WifiOff, HardDrive, QrCode, CheckCircle, AlertCircle, Brain, Compass } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { canAccessBrainDebug } from '../lib/brain/debugAnalytics.js'
 import useOnline from '../hooks/useOnline.js'
 import useSync from '../hooks/useSync.js'
 import JoinFamily from '../components/sync/JoinFamily.jsx'
+import MemberPermissions from '../components/settings/MemberPermissions.jsx'
 
 export default function SettingsPage() {
-  const { familyId, currentMember, sessionPin, logout, fullReset } = useAuthStore()
+  const { familyId, currentMember, sessionPin, logout, fullReset, setTourCompleted, isParent } = useAuthStore()
   const { isOnline } = useOnline()
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [showResetFinal, setShowResetFinal] = useState(false)
@@ -162,6 +163,15 @@ export default function SettingsPage() {
           {members.filter(m => m.role === 'child').length} figli
         </p>
       </div>
+
+      {/* Permission editor — only for parents/elders */}
+      {isParent() && members && (
+        <MemberPermissions
+          members={members.filter(m => !m._deleted)}
+          currentMember={currentMember}
+          familyId={familyId}
+        />
+      )}
 
       {/* Privacy & Data section */}
       <div className="rounded-2xl bg-white p-4 shadow-sm border border-gray-100">
@@ -383,6 +393,19 @@ export default function SettingsPage() {
 
       {/* Actions */}
       <div className="flex flex-col gap-3 mt-2">
+        <button
+          type="button"
+          onClick={() => {
+            setTourCompleted(false)
+            showSuccess('Guida riattivata! Torna alla Home per rivederla.')
+          }}
+          className="flex items-center justify-center gap-2 w-full rounded-xl border border-violet-200
+            px-4 py-3 text-sm font-medium text-violet-700 hover:bg-violet-50 transition-colors"
+        >
+          <Compass size={16} />
+          Ripeti guida
+        </button>
+
         <button
           type="button"
           onClick={logout}

@@ -10,7 +10,7 @@
  *
  * Niente budget bar, niente quick access buttons.
  */
-import { useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../lib/localDb.js'
@@ -31,6 +31,8 @@ import BrainInput from '../components/brain/BrainInput.jsx'
 import ActivityFeed from '../components/shared/ActivityFeed.jsx'
 import { useBrainContext } from '../components/layout/AppShell.jsx'
 import { Skeleton } from '../components/shared/index.js'
+import SpotlightTour from '../components/shared/SpotlightTour.jsx'
+import { getDashboardTourSteps } from '../lib/tourSteps.js'
 
 // ─── Meal suggestion logic based on inventory ────────────────────
 
@@ -62,7 +64,7 @@ function suggestMeals(inventoryItems) {
 
 export default function DashboardPage() {
   const navigate = useNavigate()
-  const { currentMember, familyId } = useAuthStore()
+  const { currentMember, familyId, tourCompleted, setTourCompleted, isSetupComplete } = useAuthStore()
   const brain = useBrainContext()
   const todayExpenses = useTodayExpenses(familyId)
   const todayEvents = useTodayEvents(familyId)
@@ -156,6 +158,16 @@ export default function DashboardPage() {
     .filter((e) => parentIds.has(e.person_id))
     .reduce((s, e) => s + e.total, 0)
 
+  // ── Guided tour ──
+  const [showTour, setShowTour] = useState(false)
+  useEffect(() => {
+    if (isSetupComplete && !tourCompleted && familyId && members.length > 0) {
+      const timer = setTimeout(() => setShowTour(true), 800)
+      return () => clearTimeout(timer)
+    }
+  }, [isSetupComplete, tourCompleted, familyId, members.length])
+  const handleTourComplete = () => { setShowTour(false); setTourCompleted(true) }
+
   // Skeleton: se familyId esiste ma members non ancora caricati → loading
   const isLoading = familyId && members.length === 0
 
@@ -174,7 +186,7 @@ export default function DashboardPage() {
       style={{ background: 'var(--bg-main)' }}>
 
       {/* ═══ 1. Greeting card ═══ */}
-      <div className="relative overflow-hidden rounded-2xl px-5 py-5"
+      <div data-tour="greeting-card" className="relative overflow-hidden rounded-2xl px-5 py-5"
         style={{ background: 'var(--gradient-primary)', boxShadow: 'var(--shadow-glow)' }}>
         <div className="absolute -top-6 -right-6 h-28 w-28 rounded-full bg-white/[0.06]" />
         <div className="absolute bottom-2 right-16 h-16 w-16 rounded-full bg-white/[0.04]" />
@@ -189,7 +201,7 @@ export default function DashboardPage() {
 
       {/* ═══ 2. Brain Input — il cervellone ═══ */}
       {brain && (
-        <div className="card p-4">
+        <div data-tour="brain-input" className="card p-4">
           <BrainInput
             phase={brain.phase}
             parseText={brain.parseText}
@@ -268,7 +280,7 @@ export default function DashboardPage() {
       )}
 
       {/* ═══ 3. Eventi oggi ═══ */}
-      <div className="card p-4 cursor-pointer card-interactive" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click() }} onClick={() => navigate('/calendar')}>
+      <div data-tour="events-today" className="card p-4 cursor-pointer card-interactive" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click() }} onClick={() => navigate('/calendar')}>
         <div className="flex items-center gap-2.5 mb-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl"
             style={{ background: 'rgba(9,132,227,0.12)' }}>
@@ -320,7 +332,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ═══ 4. Task oggi ═══ */}
-      <div className="card p-4 cursor-pointer card-interactive" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click() }} onClick={() => navigate('/tasks')}>
+      <div data-tour="tasks-today" className="card p-4 cursor-pointer card-interactive" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click() }} onClick={() => navigate('/tasks')}>
         <div className="flex items-center gap-2.5 mb-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl"
             style={{ background: 'rgba(0,184,148,0.12)' }}>
@@ -537,6 +549,13 @@ export default function DashboardPage() {
           to { opacity: 1; }
         }
       `}</style>
+
+      {/* ═══ Guided Tour ═══ */}
+      <SpotlightTour
+        steps={getDashboardTourSteps()}
+        isOpen={showTour}
+        onComplete={handleTourComplete}
+      />
     </div>
   )
 }

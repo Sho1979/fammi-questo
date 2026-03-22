@@ -13,7 +13,7 @@ import { getBrainStats } from '../../lib/brain/index.js'
 import useAuthStore from '../../store/authStore.js'
 
 export default function BrainInput({ phase, parseText, startVoice, aiCallsRemaining, speechAvailable, nlpReady }) {
-  const { familyId } = useAuthStore()
+  const { familyId, brainTipCount, incrementBrainTipCount } = useAuthStore()
   const [text, setText] = useState('')
   const [showStats, setShowStats] = useState(false)
   const [stats, setStats] = useState(null)
@@ -26,6 +26,7 @@ export default function BrainInput({ phase, parseText, startVoice, aiCallsRemain
     if (!trimmed || isActive) return
     parseText(trimmed)
     setText('')
+    incrementBrainTipCount()
   }
 
   const handleKeyDown = (e) => {
@@ -106,6 +107,15 @@ export default function BrainInput({ phase, parseText, startVoice, aiCallsRemain
       {/* Input row */}
       <div className="flex items-end gap-2">
         <div className="flex-1 relative">
+          {/* First-use tip — shown for the first 2 Brain interactions */}
+          {brainTipCount < 2 && !isActive && (
+            <div className="absolute -top-11 left-1 right-1 z-10 pointer-events-none">
+              <div className="rounded-xl px-3 py-1.5 text-[11px] text-white shadow-lg bg-violet-600 animate-pulse">
+                💡 Prova: <strong>"Ho speso 5€ al bar"</strong> o <strong>"Dentista domani alle 10"</strong>
+                <div className="absolute bottom-[-5px] left-5 w-2.5 h-2.5 rotate-45 bg-violet-600" />
+              </div>
+            </div>
+          )}
           <textarea
             ref={inputRef}
             value={text}
