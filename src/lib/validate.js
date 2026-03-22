@@ -55,7 +55,7 @@ export function isValidDate(value) {
   if (!value || typeof value !== 'string') return false
   const match = /^\d{4}-\d{2}-\d{2}$/.test(value)
   if (!match) return false
-  const d = new Date(value + 'T00:00:00')
+  const d = new Date(value + 'T12:00:00')
   return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value
 }
 

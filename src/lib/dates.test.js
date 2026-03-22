@@ -9,6 +9,12 @@ import {
   getMonthRange,
   getWeekRange,
   isToday,
+  getWeekDays,
+  formatDayShort,
+  addDays,
+  getCalendarGrid,
+  formatMonthYear,
+  formatTime,
 } from './dates.js'
 
 describe('dates', () => {
@@ -98,6 +104,92 @@ describe('dates', () => {
 
     it('returns false for invalid input', () => {
       expect(isToday('invalid')).toBe(false)
+    })
+  })
+
+  describe('getWeekDays', () => {
+    it('returns 7 days starting from Monday', () => {
+      const days = getWeekDays('2026-03-25') // Wednesday
+      expect(days).toHaveLength(7)
+      expect(days[0]).toBe('2026-03-23') // Monday
+      expect(days[6]).toBe('2026-03-29') // Sunday
+    })
+    it('handles Sunday input', () => {
+      const days = getWeekDays('2026-03-22') // Sunday
+      expect(days[0]).toBe('2026-03-16')
+      expect(days[6]).toBe('2026-03-22')
+    })
+    it('returns empty array for invalid', () => {
+      expect(getWeekDays('bad')).toEqual([])
+    })
+  })
+
+  describe('formatDayShort', () => {
+    it('formats as "Lun 23"', () => {
+      expect(formatDayShort('2026-03-23T00:00:00')).toBe('Lun 23')
+    })
+    it('formats Sunday', () => {
+      expect(formatDayShort('2026-03-22T00:00:00')).toBe('Dom 22')
+    })
+    it('returns empty for invalid', () => {
+      expect(formatDayShort('nope')).toBe('')
+    })
+  })
+
+  describe('addDays', () => {
+    it('adds positive days', () => {
+      expect(addDays('2026-03-22', 3)).toBe('2026-03-25')
+    })
+    it('subtracts with negative offset', () => {
+      expect(addDays('2026-03-22', -5)).toBe('2026-03-17')
+    })
+    it('crosses month boundary', () => {
+      expect(addDays('2026-03-30', 5)).toBe('2026-04-04')
+    })
+  })
+
+  describe('getCalendarGrid', () => {
+    it('returns grid divisible by 7', () => {
+      const grid = getCalendarGrid(2026, 2) // March 2026
+      expect(grid.length % 7).toBe(0)
+    })
+    it('marks current month days correctly', () => {
+      const grid = getCalendarGrid(2026, 2)
+      const marchDays = grid.filter(d => d.isCurrentMonth)
+      expect(marchDays).toHaveLength(31)
+      expect(marchDays[0].day).toBe(1)
+      expect(marchDays[30].day).toBe(31)
+    })
+    it('includes padding days from adjacent months', () => {
+      const grid = getCalendarGrid(2026, 2)
+      const padding = grid.filter(d => !d.isCurrentMonth)
+      expect(padding.length).toBeGreaterThan(0)
+    })
+    it('each cell has required properties', () => {
+      const grid = getCalendarGrid(2026, 2)
+      expect(grid[0]).toHaveProperty('date')
+      expect(grid[0]).toHaveProperty('day')
+      expect(grid[0]).toHaveProperty('isCurrentMonth')
+      expect(grid[0]).toHaveProperty('isToday')
+    })
+  })
+
+  describe('formatMonthYear', () => {
+    it('returns capitalized Italian month + year', () => {
+      expect(formatMonthYear(2026, 2)).toBe('Marzo 2026')
+      expect(formatMonthYear(2026, 0)).toBe('Gennaio 2026')
+      expect(formatMonthYear(2026, 11)).toBe('Dicembre 2026')
+    })
+  })
+
+  describe('formatTime', () => {
+    it('passes through valid time', () => {
+      expect(formatTime('14:30')).toBe('14:30')
+    })
+    it('returns empty for falsy', () => {
+      expect(formatTime('')).toBe('')
+      expect(formatTime(null)).toBe('')
+      expect(formatTime(undefined)).toBe('')
     })
   })
 })
