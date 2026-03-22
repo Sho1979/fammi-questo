@@ -16,9 +16,9 @@ import useAuthStore from '../../store/authStore.js'
 async function simulateWizardCompletion(wizardData) {
   const familyId = crypto.randomUUID()
 
-  // 1. Create family
+  // 1. Create family (id must match familyId used for members)
   await createRecord('family', {
-    family_id: familyId,
+    id: familyId,
     name: 'La mia famiglia',
     created_by: 'setup',
   })
@@ -107,11 +107,16 @@ describe('SetupWizard completion logic', () => {
       childPin: '5678',
     })
 
-    // Family
+    // Family — PK must match familyId used for members
     const families = await db.family.toArray()
     expect(families).toHaveLength(1)
-    expect(families[0].family_id).toBe(familyId)
+    expect(families[0].id).toBe(familyId)
     expect(families[0].name).toBe('La mia famiglia')
+
+    // Verify family can be retrieved by id (critical for sync.js)
+    const familyById = await db.family.get(familyId)
+    expect(familyById).toBeDefined()
+    expect(familyById.name).toBe('La mia famiglia')
 
     // Members
     const members = await db.members.where('family_id').equals(familyId).toArray()

@@ -11,6 +11,18 @@
 import { supabase, isSyncEnabled } from './supabase.js'
 
 /**
+ * Structured error for OCR operations.
+ * Codes: OCR_NOT_AVAILABLE, OCR_SYNC_DISABLED, OCR_INVALID_IMAGE, OCR_API_ERROR
+ */
+export class OcrError extends Error {
+  constructor(code, message) {
+    super(message)
+    this.name = 'OcrError'
+    this.code = code
+  }
+}
+
+/**
  * Capture photo from device camera.
  * Returns base64 data URL.
  */
@@ -51,8 +63,15 @@ export function captureReceipt() {
  * @returns {Promise<Array<{name: string, quantity: number, price: number|null, category: string}>>}
  */
 export async function extractProductsFromReceipt(imageDataUrl) {
+  // Guard: OCR edge function not yet deployed
+  throw new OcrError(
+    'OCR_NOT_AVAILABLE',
+    'La scansione scontrini non è ancora disponibile. Inserisci la spesa manualmente.'
+  )
+
+  // --- Implementazione futura (rimuovere il throw sopra quando receipt-ocr è deployata) ---
   if (!isSyncEnabled()) {
-    throw new Error('OCR non disponibile: sync non configurato.')
+    throw new OcrError('OCR_SYNC_DISABLED', 'OCR non disponibile: sync non configurato.')
   }
 
   // Extract base64 and media type

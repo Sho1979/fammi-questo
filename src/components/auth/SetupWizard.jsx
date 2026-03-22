@@ -95,7 +95,7 @@ export default function SetupWizard() {
 
       // 1. Create family
       await createRecord('family', {
-        family_id: familyId,
+        id: familyId,
         name: 'La mia famiglia',
         created_by: 'setup',
       })
